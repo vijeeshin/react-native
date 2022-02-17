@@ -35,12 +35,17 @@ import {
   SeparatorComponent,
   Spindicator,
   genNewerItems,
+  genOlderItems,
   getItemLayout,
   pressItem,
   renderSmallSwitchOption,
 } from '../../components/ListExampleShared';
 
 import type {Item} from '../../components/ListExampleShared';
+
+const PAGE_SIZE = 100;
+const INITIAL_PAGE_OFFSET = 5;
+const NUM_PAGES = 10;
 
 const VIEWABILITY_CONFIG = {
   minimumViewTime: 3000,
@@ -67,7 +72,9 @@ type State = {|
 
 class FlatListExample extends React.PureComponent<Props, State> {
   state: State = {
-    data: genNewerItems(100),
+    data: genNewerItems(PAGE_SIZE, PAGE_SIZE * INITIAL_PAGE_OFFSET),
+    first: PAGE_SIZE * INITIAL_PAGE_OFFSET,
+    last: PAGE_SIZE + PAGE_SIZE * INITIAL_PAGE_OFFSET,
     debug: false,
     horizontal: false,
     inverted: false,
@@ -222,6 +229,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
             numColumns={1}
+            onStartReached={this._onStartReached}
             onEndReached={this._onEndReached}
             onRefresh={this._onRefresh}
             onScroll={
@@ -232,6 +240,10 @@ class FlatListExample extends React.PureComponent<Props, State> {
             refreshing={false}
             contentContainerStyle={styles.list}
             viewabilityConfig={VIEWABILITY_CONFIG}
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 1,
+              autoscrollToTopThreshold: -Number.MAX_SAFE_INTEGER,
+            }}
             {...flatListItemRendererProps}
           />
         </View>
@@ -251,12 +263,23 @@ class FlatListExample extends React.PureComponent<Props, State> {
   _getItemLayout = (data: any, index: number) => {
     return getItemLayout(data, index, this.state.horizontal);
   };
+  _onStartReached = () => {
+    if (this.state.first <= 0) {
+      return;
+    }
+
+    this.setState(state => ({
+      data: genOlderItems(PAGE_SIZE, state.first).concat(state.data),
+      first: state.first - PAGE_SIZE,
+    }));
+  };
   _onEndReached = () => {
-    if (this.state.data.length >= 1000) {
+    if (this.state.last >= PAGE_SIZE * NUM_PAGES) {
       return;
     }
     this.setState(state => ({
-      data: state.data.concat(genNewerItems(100, state.data.length)),
+      data: state.data.concat(genNewerItems(PAGE_SIZE, state.data.length)),
+      last: state.last + PAGE_SIZE,
     }));
   };
   _onPressCallback = () => {
