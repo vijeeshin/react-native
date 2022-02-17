@@ -34,7 +34,7 @@ import {
   PlainInput,
   SeparatorComponent,
   Spindicator,
-  genItemData,
+  genNewerItems,
   getItemLayout,
   pressItem,
   renderSmallSwitchOption,
@@ -67,7 +67,7 @@ type State = {|
 
 class FlatListExample extends React.PureComponent<Props, State> {
   state: State = {
-    data: genItemData(100),
+    data: genNewerItems(100),
     debug: false,
     horizontal: false,
     inverted: false,
@@ -256,7 +256,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
       return;
     }
     this.setState(state => ({
-      data: state.data.concat(genItemData(100, state.data.length)),
+      data: state.data.concat(genNewerItems(100, state.data.length)),
     }));
   };
   _onPressCallback = () => {
