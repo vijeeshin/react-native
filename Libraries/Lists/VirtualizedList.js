@@ -1581,7 +1581,6 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     if (
       width > 0 &&
       height > 0 &&
-      this.props.initialScrollIndex != null &&
       this.props.initialScrollIndex > 0 &&
       !this._hasDoneInitialScroll
     ) {
