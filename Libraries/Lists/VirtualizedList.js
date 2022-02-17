@@ -1232,6 +1232,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     visibleLength: 0,
   };
   _scrollRef: ?React.ElementRef<any> = null;
+  _sentStartForContentLength = 0;
   _sentEndForContentLength = 0;
   _totalCellLength = 0;
   _totalCellsMeasured = 0;
@@ -1409,7 +1410,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     }
     this.props.onLayout && this.props.onLayout(e);
     this._scheduleCellsToRenderUpdate();
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
   };
 
   _onLayoutEmpty = e => {
@@ -1511,26 +1512,63 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     return !horizontalOrDefault(this.props.horizontal) ? metrics.y : metrics.x;
   }
 
-  _maybeCallOnEndReached() {
-    const {data, getItemCount, onEndReached, onEndReachedThreshold} =
-      this.props;
+  _maybeCallOnEdgeReached() {
+    const {
+      data,
+      getItemCount,
+      onStartReached,
+      onStartReachedThreshold,
+      onEndReached,
+      onEndReachedThreshold,
+    } = this.props;
     const {contentLength, visibleLength, offset} = this._scrollMetrics;
+    const distanceFromStart = offset;
     const distanceFromEnd = contentLength - visibleLength - offset;
-    const threshold =
-      onEndReachedThreshold != null ? onEndReachedThreshold * visibleLength : 2;
+    const startThreshold =
+      onStartReachedThresholdOrDefault(onStartReachedThreshold) * visibleLength;
+    const endThreshold =
+      onEndReachedThresholdOrDefault(onEndReachedThreshold) * visibleLength;
+    const isWithinStartThreshold = distanceFromStart <= startThreshold;
+    const isWithinEndThreshold = distanceFromEnd <= endThreshold;
+    const shouldExecuteNewCallback =
+      this._scrollMetrics.contentLength !== this._sentStartForContentLength &&
+      this._scrollMetrics.contentLength !== this._sentEndForContentLength;
+
+    // First check if the user just scrolled within the end threshold
+    // and call onEndReached only once for a given content length,
+    // and only if onStartReached is not being executed
     if (
       onEndReached &&
-      this.state.last === getItemCount(data) - 1 &&
-      distanceFromEnd < threshold &&
-      this._scrollMetrics.contentLength !== this._sentEndForContentLength
+      isWithinEndThreshold &&
+      shouldExecuteNewCallback &&
+      this.state.last === getItemCount(data) - 1
     ) {
-      // Only call onEndReached once for a given content length
       this._sentEndForContentLength = this._scrollMetrics.contentLength;
       onEndReached({distanceFromEnd});
-    } else if (distanceFromEnd > threshold) {
-      // If the user scrolls away from the end and back again cause
-      // an onEndReached to be triggered again
-      this._sentEndForContentLength = 0;
+    }
+
+    // Next check if the user just scrolled within the start threshold
+    // and call onStartReached only once for a given content length,
+    // and only if onEndReached is not being executed
+    else if (
+      onStartReached &&
+      isWithinStartThreshold &&
+      shouldExecuteNewCallback &&
+      this.state.first === 0
+    ) {
+      this._sentStartForContentLength = this._scrollMetrics.contentLength;
+      onStartReached({distanceFromStart});
+    }
+
+    // If the user scrolls away from the start or end and back again,
+    // cause onStartReached or onEndReached to be triggered again
+    else {
+      this._sentStartForContentLength = isWithinStartThreshold
+        ? this._sentStartForContentLength
+        : 0;
+      this._sentEndForContentLength = isWithinEndThreshold
+        ? this._sentEndForContentLength
+        : 0;
     }
   }
 
@@ -1555,7 +1593,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     }
     this._scrollMetrics.contentLength = this._selectLength({height, width});
     this._scheduleCellsToRenderUpdate();
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
   };
 
   /* Translates metrics from a scroll event in a parent VirtualizedList into
@@ -1639,7 +1677,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     if (!this.props) {
       return;
     }
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
     if (velocity !== 0) {
       this._fillRateHelper.activate();
     }
