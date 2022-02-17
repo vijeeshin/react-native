@@ -242,7 +242,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
             viewabilityConfig={VIEWABILITY_CONFIG}
             maintainVisibleContentPosition={{
               minIndexForVisible: 1,
-              autoscrollToTopThreshold: -Number.MAX_SAFE_INTEGER,
+              autoscrollToTopThreshold: Number.MIN_SAFE_INTEGER,
             }}
             {...flatListItemRendererProps}
           />
