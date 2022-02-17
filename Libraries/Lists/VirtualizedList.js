@@ -210,6 +210,18 @@ type OptionalProps = {|
    */
   maxToRenderPerBatch?: ?number,
   /**
+   * Called once when the scroll position gets within `onStartReachedThreshold` of the rendered
+   * content.
+   */
+  onStartReached?: ?(info: {distanceFromStart: number, ...}) => void,
+  /**
+   * How far from the start (in units of visible length of the list) the top edge of the
+   * list must be from the start of the content to trigger the `onStartReached` callback.
+   * Thus, a value of 0.5 will trigger `onStartReached` when the end of the content is
+   * within half the visible length of the list.
+   */
+  onStartReachedThreshold?: ?number,
+  /**
    * Called once when the scroll position gets within `onEndReachedThreshold` of the rendered
    * content.
    */
@@ -217,7 +229,7 @@ type OptionalProps = {|
   /**
    * How far from the end (in units of visible length of the list) the bottom edge of the
    * list must be from the end of the content to trigger the `onEndReached` callback.
-   * Thus a value of 0.5 will trigger `onEndReached` when the end of the content is
+   * Thus, a value of 0.5 will trigger `onEndReached` when the end of the content is
    * within half the visible length of the list.
    */
   onEndReachedThreshold?: ?number,
@@ -331,6 +343,11 @@ function initialNumToRenderOrDefault(initialNumToRender: ?number) {
 // maxToRenderPerBatchOrDefault(this.props.maxToRenderPerBatch)
 function maxToRenderPerBatchOrDefault(maxToRenderPerBatch: ?number) {
   return maxToRenderPerBatch ?? 10;
+}
+
+// onStartReachedThresholdOrDefault(this.props.onStartReachedThreshold)
+function onStartReachedThresholdOrDefault(onStartReachedThreshold: ?number) {
+  return onStartReachedThreshold ?? 2;
 }
 
 // onEndReachedThresholdOrDefault(this.props.onEndReachedThreshold)
