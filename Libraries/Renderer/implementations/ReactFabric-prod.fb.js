@@ -7,7 +7,7 @@
  * @noflow
  * @nolint
  * @preventMunge
- * @generated SignedSource<<97d9d60e7b93063137af17ba2abdf915>>
+ * @generated SignedSource<<9d64ad4ce3ec89212953470f0d425676>>
  */
 
 "use strict";
@@ -927,7 +927,7 @@ eventPluginOrder = Array.prototype.slice.call([
   "ReactNativeBridgeEventPlugin"
 ]);
 recomputePluginOrdering();
-var injectedNamesToPlugins$jscomp$inline_219 = {
+var injectedNamesToPlugins$jscomp$inline_221 = {
     ResponderEventPlugin: ResponderEventPlugin,
     ReactNativeBridgeEventPlugin: {
       eventTypes: {},
@@ -962,33 +962,33 @@ var injectedNamesToPlugins$jscomp$inline_219 = {
       }
     }
   },
-  isOrderingDirty$jscomp$inline_220 = !1,
-  pluginName$jscomp$inline_221;
-for (pluginName$jscomp$inline_221 in injectedNamesToPlugins$jscomp$inline_219)
+  isOrderingDirty$jscomp$inline_222 = !1,
+  pluginName$jscomp$inline_223;
+for (pluginName$jscomp$inline_223 in injectedNamesToPlugins$jscomp$inline_221)
   if (
-    injectedNamesToPlugins$jscomp$inline_219.hasOwnProperty(
-      pluginName$jscomp$inline_221
+    injectedNamesToPlugins$jscomp$inline_221.hasOwnProperty(
+      pluginName$jscomp$inline_223
     )
   ) {
-    var pluginModule$jscomp$inline_222 =
-      injectedNamesToPlugins$jscomp$inline_219[pluginName$jscomp$inline_221];
+    var pluginModule$jscomp$inline_224 =
+      injectedNamesToPlugins$jscomp$inline_221[pluginName$jscomp$inline_223];
     if (
-      !namesToPlugins.hasOwnProperty(pluginName$jscomp$inline_221) ||
-      namesToPlugins[pluginName$jscomp$inline_221] !==
-        pluginModule$jscomp$inline_222
+      !namesToPlugins.hasOwnProperty(pluginName$jscomp$inline_223) ||
+      namesToPlugins[pluginName$jscomp$inline_223] !==
+        pluginModule$jscomp$inline_224
     ) {
-      if (namesToPlugins[pluginName$jscomp$inline_221])
+      if (namesToPlugins[pluginName$jscomp$inline_223])
         throw Error(
           "EventPluginRegistry: Cannot inject two different event plugins using the same name, `" +
-            (pluginName$jscomp$inline_221 + "`.")
+            (pluginName$jscomp$inline_223 + "`.")
         );
       namesToPlugins[
-        pluginName$jscomp$inline_221
-      ] = pluginModule$jscomp$inline_222;
-      isOrderingDirty$jscomp$inline_220 = !0;
+        pluginName$jscomp$inline_223
+      ] = pluginModule$jscomp$inline_224;
+      isOrderingDirty$jscomp$inline_222 = !0;
     }
   }
-isOrderingDirty$jscomp$inline_220 && recomputePluginOrdering();
+isOrderingDirty$jscomp$inline_222 && recomputePluginOrdering();
 function getInstanceFromInstance(instanceHandle) {
   return instanceHandle;
 }
@@ -1043,7 +1043,8 @@ var ReactSharedInternals =
   REACT_DEBUG_TRACING_MODE_TYPE = 60129,
   REACT_OFFSCREEN_TYPE = 60130,
   REACT_LEGACY_HIDDEN_TYPE = 60131,
-  REACT_CACHE_TYPE = 60132;
+  REACT_CACHE_TYPE = 60132,
+  REACT_TRACING_MARKER_TYPE = 60133;
 if ("function" === typeof Symbol && Symbol.for) {
   var symbolFor = Symbol.for;
   REACT_ELEMENT_TYPE = symbolFor("react.element");
@@ -1063,6 +1064,7 @@ if ("function" === typeof Symbol && Symbol.for) {
   REACT_OFFSCREEN_TYPE = symbolFor("react.offscreen");
   REACT_LEGACY_HIDDEN_TYPE = symbolFor("react.legacy_hidden");
   REACT_CACHE_TYPE = symbolFor("react.cache");
+  REACT_TRACING_MARKER_TYPE = symbolFor("react.tracing_marker");
 }
 var MAYBE_ITERATOR_SYMBOL = "function" === typeof Symbol && Symbol.iterator;
 function getIteratorFn(maybeIterable) {
@@ -1091,6 +1093,8 @@ function getComponentNameFromType(type) {
       return "SuspenseList";
     case REACT_CACHE_TYPE:
       return "Cache";
+    case REACT_TRACING_MARKER_TYPE:
+      return "TracingMarker";
   }
   if ("object" === typeof type)
     switch (type.$$typeof) {
@@ -1165,6 +1169,8 @@ function getComponentNameFromFiber(fiber) {
       return "Suspense";
     case 19:
       return "SuspenseList";
+    case 25:
+      return "TracingMarker";
     case 1:
     case 0:
     case 17:
@@ -3859,7 +3865,7 @@ function startTransition(setPending, callback) {
     0 !== previousPriority && 4 > previousPriority ? previousPriority : 4;
   setPending(!0);
   var prevTransition = ReactCurrentBatchConfig$1.transition;
-  ReactCurrentBatchConfig$1.transition = 1;
+  ReactCurrentBatchConfig$1.transition = {};
   try {
     setPending(!1), callback();
   } finally {
@@ -4047,7 +4053,7 @@ var ContextOnlyDispatcher = {
       mountEffect(
         function() {
           var prevTransition = ReactCurrentBatchConfig$1.transition;
-          ReactCurrentBatchConfig$1.transition = 1;
+          ReactCurrentBatchConfig$1.transition = {};
           try {
             setValue(value);
           } finally {
@@ -4131,7 +4137,7 @@ var ContextOnlyDispatcher = {
       updateEffect(
         function() {
           var prevTransition = ReactCurrentBatchConfig$1.transition;
-          ReactCurrentBatchConfig$1.transition = 1;
+          ReactCurrentBatchConfig$1.transition = {};
           try {
             setValue(value);
           } finally {
@@ -4174,7 +4180,7 @@ var ContextOnlyDispatcher = {
       updateEffect(
         function() {
           var prevTransition = ReactCurrentBatchConfig$1.transition;
-          ReactCurrentBatchConfig$1.transition = 1;
+          ReactCurrentBatchConfig$1.transition = {};
           try {
             setValue(value);
           } finally {
@@ -4270,6 +4276,21 @@ function createClassErrorUpdate(fiber, errorInfo, lane) {
       });
     });
   return lane;
+}
+function attachPingListener(root, wakeable, lanes) {
+  var pingCache = root.pingCache;
+  if (null === pingCache) {
+    pingCache = root.pingCache = new PossiblyWeakMap();
+    var threadIDs = new Set();
+    pingCache.set(wakeable, threadIDs);
+  } else
+    (threadIDs = pingCache.get(wakeable)),
+      void 0 === threadIDs &&
+        ((threadIDs = new Set()), pingCache.set(wakeable, threadIDs));
+  threadIDs.has(lanes) ||
+    (threadIDs.add(lanes),
+    (root = pingSuspendedRoot.bind(null, root, wakeable, lanes)),
+    wakeable.then(root, root));
 }
 function hadNoMutationsEffects(current, completedWork) {
   if (null !== current && current.child === completedWork.child) return !0;
@@ -4603,29 +4624,14 @@ function completeWork(current, workInProgress, renderLanes) {
         return (workInProgress.lanes = renderLanes), workInProgress;
       renderLanes = !1;
       null !== current && (renderLanes = null !== current.memoizedState);
-      if (
-        null !== newProps &&
-        !renderLanes &&
-        ((workInProgress.child.flags |= 8192), 0 !== (workInProgress.mode & 1))
-      )
-        if (null === current || 0 !== (suspenseStackCursor.current & 1))
-          0 === workInProgressRootExitStatus &&
-            (workInProgressRootExitStatus = 3);
-        else {
-          if (
-            0 === workInProgressRootExitStatus ||
-            3 === workInProgressRootExitStatus ||
-            2 === workInProgressRootExitStatus
-          )
-            workInProgressRootExitStatus = 4;
-          null === workInProgressRoot ||
-            (0 === (workInProgressRootSkippedLanes & 268435455) &&
-              0 === (workInProgressRootInterleavedUpdatedLanes & 268435455)) ||
-            markRootSuspended$1(
-              workInProgressRoot,
-              workInProgressRootRenderLanes
-            );
-        }
+      null === newProps ||
+        renderLanes ||
+        ((workInProgress.child.flags |= 8192),
+        0 !== (workInProgress.mode & 1) &&
+          (null === current || 0 !== (suspenseStackCursor.current & 1)
+            ? 0 === workInProgressRootExitStatus &&
+              (workInProgressRootExitStatus = 3)
+            : renderDidSuspendDelayIfPossible()));
       null !== workInProgress.updateQueue && (workInProgress.flags |= 4);
       bubbleProperties(workInProgress);
       return null;
@@ -5738,35 +5744,36 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
   }
   return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
 }
-function unwindWork(workInProgress) {
+function unwindWork(current, workInProgress) {
   popTreeContext(workInProgress);
   switch (workInProgress.tag) {
     case 1:
-      isContextProvider(workInProgress.type) && popContext();
-      var flags = workInProgress.flags;
-      return flags & 65536
-        ? ((workInProgress.flags = (flags & -65537) | 128), workInProgress)
-        : null;
+      return (
+        isContextProvider(workInProgress.type) && popContext(),
+        (current = workInProgress.flags),
+        current & 65536
+          ? ((workInProgress.flags = (current & -65537) | 128), workInProgress)
+          : null
+      );
     case 3:
-      popHostContainer();
-      pop(didPerformWorkStackCursor);
-      pop(contextStackCursor);
-      resetWorkInProgressVersions();
-      flags = workInProgress.flags;
-      if (0 !== (flags & 128))
-        throw Error(
-          "The root failed to unmount after an error. This is likely a bug in React. Please file an issue."
-        );
-      workInProgress.flags = (flags & -65537) | 128;
-      return workInProgress;
+      return (
+        popHostContainer(),
+        pop(didPerformWorkStackCursor),
+        pop(contextStackCursor),
+        resetWorkInProgressVersions(),
+        (current = workInProgress.flags),
+        0 !== (current & 65536) && 0 === (current & 128)
+          ? ((workInProgress.flags = (current & -65537) | 128), workInProgress)
+          : null
+      );
     case 5:
       return popHostContext(workInProgress), null;
     case 13:
       return (
         pop(suspenseStackCursor),
-        (flags = workInProgress.flags),
-        flags & 65536
-          ? ((workInProgress.flags = (flags & -65537) | 128), workInProgress)
+        (current = workInProgress.flags),
+        current & 65536
+          ? ((workInProgress.flags = (current & -65537) | 128), workInProgress)
           : null
       );
     case 19:
@@ -6262,7 +6269,7 @@ function requestUpdateLane(fiber) {
   if (0 === (fiber.mode & 1)) return 1;
   if (0 !== (executionContext & 2) && 0 !== workInProgressRootRenderLanes)
     return workInProgressRootRenderLanes & -workInProgressRootRenderLanes;
-  if (0 !== ReactCurrentBatchConfig.transition)
+  if (null !== ReactCurrentBatchConfig.transition)
     return (
       0 === currentEventTransitionLane &&
         ((fiber = nextTransitionLane),
@@ -6297,18 +6304,29 @@ function scheduleUpdateOnFiber(fiber, lane, eventTime) {
   var root = markUpdateLaneFromFiberToRoot(fiber, lane);
   if (null === root) return null;
   markRootUpdated(root, lane, eventTime);
-  if (0 === (executionContext & 2) || root !== workInProgressRoot)
-    root === workInProgressRoot &&
-      (0 === (executionContext & 2) &&
-        (workInProgressRootInterleavedUpdatedLanes |= lane),
-      4 === workInProgressRootExitStatus &&
-        markRootSuspended$1(root, workInProgressRootRenderLanes)),
-      ensureRootIsScheduled(root, eventTime),
-      1 === lane &&
-        0 === executionContext &&
-        0 === (fiber.mode & 1) &&
-        ((workInProgressRootRenderTargetTime = now() + 500),
-        includesLegacySyncCallbacks && flushSyncCallbacks());
+  if (0 === (executionContext & 2) || root !== workInProgressRoot) {
+    if (root.isDehydrated && 0 !== root.tag) {
+      workInProgressRoot === root && prepareFreshStack(root, 0);
+      root.isDehydrated = !1;
+      var onRecoverableError$91 = root.onRecoverableError;
+      onRecoverableError$91(
+        Error(
+          "This root received an early update, before anything was able hydrate. Switched the entire root to client rendering."
+        )
+      );
+    } else
+      root === workInProgressRoot &&
+        (0 === (executionContext & 2) &&
+          (workInProgressRootInterleavedUpdatedLanes |= lane),
+        4 === workInProgressRootExitStatus &&
+          markRootSuspended$1(root, workInProgressRootRenderLanes));
+    ensureRootIsScheduled(root, eventTime);
+    1 === lane &&
+      0 === executionContext &&
+      0 === (fiber.mode & 1) &&
+      ((workInProgressRootRenderTargetTime = now() + 500),
+      includesLegacySyncCallbacks && flushSyncCallbacks());
+  }
   return root;
 }
 function markUpdateLaneFromFiberToRoot(sourceFiber, lane) {
@@ -6454,96 +6472,99 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
       markRootSuspended$1(root, lanes),
       ensureRootIsScheduled(root, now()),
       originalCallbackNode);
-    prevDispatcher = !includesBlockingLane(root, lanes);
-    prevExecutionContext = root.current.alternate;
-    if (
-      prevDispatcher &&
-      !isRenderConsistentWithExternalStores(prevExecutionContext) &&
-      ((didTimeout = renderRootSync(root, lanes)),
-      2 === didTimeout &&
-        ((prevDispatcher = getLanesToRetrySynchronouslyOnError(root)),
-        0 !== prevDispatcher &&
-          ((lanes = prevDispatcher),
-          (didTimeout = recoverFromConcurrentError(root, prevDispatcher)))),
-      1 === didTimeout)
-    )
-      throw ((originalCallbackNode = workInProgressRootFatalError),
-      prepareFreshStack(root, 0),
-      markRootSuspended$1(root, lanes),
-      ensureRootIsScheduled(root, now()),
-      originalCallbackNode);
-    root.finishedWork = prevExecutionContext;
-    root.finishedLanes = lanes;
-    switch (didTimeout) {
-      case 0:
-      case 1:
-        throw Error("Root did not complete. This is a bug in React.");
-      case 2:
-        commitRoot(root, workInProgressRootRecoverableErrors);
-        break;
-      case 3:
-        markRootSuspended$1(root, lanes);
-        if (
-          (lanes & 130023424) === lanes &&
-          ((didTimeout = globalMostRecentFallbackTime + 500 - now()),
-          10 < didTimeout)
-        ) {
-          if (0 !== getNextLanes(root, 0)) break;
-          prevExecutionContext = root.suspendedLanes;
-          if ((prevExecutionContext & lanes) !== lanes) {
-            requestEventTime();
-            root.pingedLanes |= root.suspendedLanes & prevExecutionContext;
+    if (6 === didTimeout) markRootSuspended$1(root, lanes);
+    else {
+      prevDispatcher = !includesBlockingLane(root, lanes);
+      prevExecutionContext = root.current.alternate;
+      if (
+        prevDispatcher &&
+        !isRenderConsistentWithExternalStores(prevExecutionContext) &&
+        ((didTimeout = renderRootSync(root, lanes)),
+        2 === didTimeout &&
+          ((prevDispatcher = getLanesToRetrySynchronouslyOnError(root)),
+          0 !== prevDispatcher &&
+            ((lanes = prevDispatcher),
+            (didTimeout = recoverFromConcurrentError(root, prevDispatcher)))),
+        1 === didTimeout)
+      )
+        throw ((originalCallbackNode = workInProgressRootFatalError),
+        prepareFreshStack(root, 0),
+        markRootSuspended$1(root, lanes),
+        ensureRootIsScheduled(root, now()),
+        originalCallbackNode);
+      root.finishedWork = prevExecutionContext;
+      root.finishedLanes = lanes;
+      switch (didTimeout) {
+        case 0:
+        case 1:
+          throw Error("Root did not complete. This is a bug in React.");
+        case 2:
+          commitRoot(root, workInProgressRootRecoverableErrors);
+          break;
+        case 3:
+          markRootSuspended$1(root, lanes);
+          if (
+            (lanes & 130023424) === lanes &&
+            ((didTimeout = globalMostRecentFallbackTime + 500 - now()),
+            10 < didTimeout)
+          ) {
+            if (0 !== getNextLanes(root, 0)) break;
+            prevExecutionContext = root.suspendedLanes;
+            if ((prevExecutionContext & lanes) !== lanes) {
+              requestEventTime();
+              root.pingedLanes |= root.suspendedLanes & prevExecutionContext;
+              break;
+            }
+            root.timeoutHandle = scheduleTimeout(
+              commitRoot.bind(null, root, workInProgressRootRecoverableErrors),
+              didTimeout
+            );
             break;
           }
-          root.timeoutHandle = scheduleTimeout(
-            commitRoot.bind(null, root, workInProgressRootRecoverableErrors),
-            didTimeout
-          );
+          commitRoot(root, workInProgressRootRecoverableErrors);
           break;
-        }
-        commitRoot(root, workInProgressRootRecoverableErrors);
-        break;
-      case 4:
-        markRootSuspended$1(root, lanes);
-        if ((lanes & 4194240) === lanes) break;
-        didTimeout = root.eventTimes;
-        for (prevExecutionContext = -1; 0 < lanes; ) {
-          var index$4 = 31 - clz32(lanes);
-          prevDispatcher = 1 << index$4;
-          index$4 = didTimeout[index$4];
-          index$4 > prevExecutionContext && (prevExecutionContext = index$4);
-          lanes &= ~prevDispatcher;
-        }
-        lanes = prevExecutionContext;
-        lanes = now() - lanes;
-        lanes =
-          (120 > lanes
-            ? 120
-            : 480 > lanes
-            ? 480
-            : 1080 > lanes
-            ? 1080
-            : 1920 > lanes
-            ? 1920
-            : 3e3 > lanes
-            ? 3e3
-            : 4320 > lanes
-            ? 4320
-            : 1960 * ceil(lanes / 1960)) - lanes;
-        if (10 < lanes) {
-          root.timeoutHandle = scheduleTimeout(
-            commitRoot.bind(null, root, workInProgressRootRecoverableErrors),
-            lanes
-          );
+        case 4:
+          markRootSuspended$1(root, lanes);
+          if ((lanes & 4194240) === lanes) break;
+          didTimeout = root.eventTimes;
+          for (prevExecutionContext = -1; 0 < lanes; ) {
+            var index$4 = 31 - clz32(lanes);
+            prevDispatcher = 1 << index$4;
+            index$4 = didTimeout[index$4];
+            index$4 > prevExecutionContext && (prevExecutionContext = index$4);
+            lanes &= ~prevDispatcher;
+          }
+          lanes = prevExecutionContext;
+          lanes = now() - lanes;
+          lanes =
+            (120 > lanes
+              ? 120
+              : 480 > lanes
+              ? 480
+              : 1080 > lanes
+              ? 1080
+              : 1920 > lanes
+              ? 1920
+              : 3e3 > lanes
+              ? 3e3
+              : 4320 > lanes
+              ? 4320
+              : 1960 * ceil(lanes / 1960)) - lanes;
+          if (10 < lanes) {
+            root.timeoutHandle = scheduleTimeout(
+              commitRoot.bind(null, root, workInProgressRootRecoverableErrors),
+              lanes
+            );
+            break;
+          }
+          commitRoot(root, workInProgressRootRecoverableErrors);
           break;
-        }
-        commitRoot(root, workInProgressRootRecoverableErrors);
-        break;
-      case 5:
-        commitRoot(root, workInProgressRootRecoverableErrors);
-        break;
-      default:
-        throw Error("Unknown root exit status.");
+        case 5:
+          commitRoot(root, workInProgressRootRecoverableErrors);
+          break;
+        default:
+          throw Error("Unknown root exit status.");
+      }
     }
   }
   ensureRootIsScheduled(root, now());
@@ -6552,20 +6573,23 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
     : null;
 }
 function recoverFromConcurrentError(root, errorRetryLanes) {
-  var prevExecutionContext = executionContext;
-  executionContext |= 8;
-  root.isDehydrated && (root.isDehydrated = !1);
+  root.isDehydrated &&
+    ((root.isDehydrated = !1),
+    renderDidError(
+      Error(
+        "There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering."
+      )
+    ));
   var errorsFromFirstAttempt = workInProgressRootConcurrentErrors;
   root = renderRootSync(root, errorRetryLanes);
   2 !== root &&
     null !== errorsFromFirstAttempt &&
-    (null === workInProgressRootConcurrentErrors
+    (null === workInProgressRootRecoverableErrors
       ? (workInProgressRootRecoverableErrors = errorsFromFirstAttempt)
-      : (workInProgressRootConcurrentErrors = workInProgressRootConcurrentErrors.push.apply(
-          null,
+      : workInProgressRootRecoverableErrors.push.apply(
+          workInProgressRootRecoverableErrors,
           errorsFromFirstAttempt
-        )));
-  executionContext = prevExecutionContext;
+        ));
   return root;
 }
 function isRenderConsistentWithExternalStores(finishedWork) {
@@ -6633,6 +6657,8 @@ function performSyncWorkOnRoot(root) {
     markRootSuspended$1(root, lanes),
     ensureRootIsScheduled(root, now()),
     exitStatus);
+  if (6 === exitStatus)
+    throw Error("Root did not complete. This is a bug in React.");
   root.finishedWork = root.current.alternate;
   root.finishedLanes = lanes;
   commitRoot(root, workInProgressRootRecoverableErrors);
@@ -6825,48 +6851,30 @@ function handleError(root$jscomp$0, thrownValue) {
                 sourceFiber.lanes |= 1;
               }
             else (value.flags |= 65536), (value.lanes = sourceFiber$jscomp$0);
-            sourceFiber = void 0;
-            value = suspenseBoundary;
-            if (value.mode & 1) {
-              var pingCache = root.pingCache;
-              null === pingCache
-                ? ((pingCache = root.pingCache = new PossiblyWeakMap()),
-                  (sourceFiber = new Set()),
-                  pingCache.set(wakeable, sourceFiber))
-                : ((sourceFiber = pingCache.get(wakeable)),
-                  void 0 === sourceFiber &&
-                    ((sourceFiber = new Set()),
-                    pingCache.set(wakeable, sourceFiber)));
-              if (!sourceFiber.has(thrownValue)) {
-                sourceFiber.add(thrownValue);
-                var ping = pingSuspendedRoot.bind(
-                  null,
-                  root,
-                  wakeable,
-                  thrownValue
-                );
-                wakeable.then(ping, ping);
-              }
-            }
-            var wakeables = value.updateQueue;
+            suspenseBoundary.mode & 1 &&
+              attachPingListener(root, wakeable, thrownValue);
+            thrownValue = suspenseBoundary;
+            root = wakeable;
+            var wakeables = thrownValue.updateQueue;
             if (null === wakeables) {
               var updateQueue = new Set();
-              updateQueue.add(wakeable);
-              value.updateQueue = updateQueue;
-            } else wakeables.add(wakeable);
+              updateQueue.add(root);
+              thrownValue.updateQueue = updateQueue;
+            } else wakeables.add(root);
             break a;
-          } else
+          } else {
+            if (0 === (thrownValue & 1)) {
+              attachPingListener(root, wakeable, thrownValue);
+              renderDidSuspendDelayIfPossible();
+              break a;
+            }
             value = Error(
               (getComponentNameFromFiber(sourceFiber) || "A React component") +
                 " suspended while rendering, but no fallback UI was specified.\n\nAdd a <Suspense fallback=...> component higher in the tree to provide a loading indicator or placeholder to display."
             );
+          }
         }
-        root = value;
-        4 !== workInProgressRootExitStatus &&
-          (workInProgressRootExitStatus = 2);
-        null === workInProgressRootConcurrentErrors
-          ? (workInProgressRootConcurrentErrors = [root])
-          : workInProgressRootConcurrentErrors.push(root);
+        renderDidError(value);
         value = createCapturedValue(value, sourceFiber);
         root = returnFiber;
         do {
@@ -6926,6 +6934,24 @@ function pushDispatcher() {
   ReactCurrentDispatcher$2.current = ContextOnlyDispatcher;
   return null === prevDispatcher ? ContextOnlyDispatcher : prevDispatcher;
 }
+function renderDidSuspendDelayIfPossible() {
+  if (
+    0 === workInProgressRootExitStatus ||
+    3 === workInProgressRootExitStatus ||
+    2 === workInProgressRootExitStatus
+  )
+    workInProgressRootExitStatus = 4;
+  null === workInProgressRoot ||
+    (0 === (workInProgressRootSkippedLanes & 268435455) &&
+      0 === (workInProgressRootInterleavedUpdatedLanes & 268435455)) ||
+    markRootSuspended$1(workInProgressRoot, workInProgressRootRenderLanes);
+}
+function renderDidError(error) {
+  4 !== workInProgressRootExitStatus && (workInProgressRootExitStatus = 2);
+  null === workInProgressRootConcurrentErrors
+    ? (workInProgressRootConcurrentErrors = [error])
+    : workInProgressRootConcurrentErrors.push(error);
+}
 function renderRootSync(root, lanes) {
   var prevExecutionContext = executionContext;
   executionContext |= 2;
@@ -6978,16 +7004,21 @@ function completeUnitOfWork(unitOfWork) {
         return;
       }
     } else {
-      current = unwindWork(completedWork);
+      current = unwindWork(current, completedWork);
       if (null !== current) {
         current.flags &= 32767;
         workInProgress = current;
         return;
       }
-      null !== unitOfWork &&
-        ((unitOfWork.flags |= 32768),
-        (unitOfWork.subtreeFlags = 0),
-        (unitOfWork.deletions = null));
+      if (null !== unitOfWork)
+        (unitOfWork.flags |= 32768),
+          (unitOfWork.subtreeFlags = 0),
+          (unitOfWork.deletions = null);
+      else {
+        workInProgressRootExitStatus = 6;
+        workInProgress = null;
+        return;
+      }
     }
     completedWork = completedWork.sibling;
     if (null !== completedWork) {
@@ -7002,7 +7033,7 @@ function commitRoot(root, recoverableErrors) {
   var previousUpdateLanePriority = currentUpdatePriority,
     prevTransition = ReactCurrentBatchConfig$2.transition;
   try {
-    (ReactCurrentBatchConfig$2.transition = 0),
+    (ReactCurrentBatchConfig$2.transition = null),
       (currentUpdatePriority = 1),
       commitRootImpl(root, recoverableErrors, previousUpdateLanePriority);
   } finally {
@@ -7043,7 +7074,7 @@ function commitRootImpl(root, recoverableErrors, renderPriorityLevel) {
   remainingLanes = 0 !== (finishedWork.flags & 15990);
   if (0 !== (finishedWork.subtreeFlags & 15990) || remainingLanes) {
     remainingLanes = ReactCurrentBatchConfig$2.transition;
-    ReactCurrentBatchConfig$2.transition = 0;
+    ReactCurrentBatchConfig$2.transition = null;
     var previousPriority = currentUpdatePriority;
     currentUpdatePriority = 1;
     var prevExecutionContext = executionContext;
@@ -7068,13 +7099,11 @@ function commitRootImpl(root, recoverableErrors, renderPriorityLevel) {
   ensureRootIsScheduled(root, now());
   if (null !== recoverableErrors)
     for (
-      renderPriorityLevel = 0;
-      renderPriorityLevel < recoverableErrors.length;
-      renderPriorityLevel++
+      renderPriorityLevel = root.onRecoverableError, finishedWork = 0;
+      finishedWork < recoverableErrors.length;
+      finishedWork++
     )
-      (finishedWork = recoverableErrors[renderPriorityLevel]),
-        (lanes = root.onRecoverableError),
-        null !== lanes && lanes(finishedWork);
+      renderPriorityLevel(recoverableErrors[finishedWork]);
   if (hasUncaughtError)
     throw ((hasUncaughtError = !1),
     (root = firstUncaughtError),
@@ -7098,7 +7127,7 @@ function flushPassiveEffects() {
       prevTransition = ReactCurrentBatchConfig$2.transition,
       previousPriority = currentUpdatePriority;
     try {
-      ReactCurrentBatchConfig$2.transition = 0;
+      ReactCurrentBatchConfig$2.transition = null;
       currentUpdatePriority = 16 > renderPriority ? 16 : renderPriority;
       if (null === rootWithPendingPassiveEffects)
         var JSCompiler_inline_result = !1;
@@ -7251,11 +7280,7 @@ function captureCommitPhaseError(sourceFiber, nearestMountedAncestor, error) {
   if (3 === sourceFiber.tag)
     captureCommitPhaseErrorOnRoot(sourceFiber, sourceFiber, error);
   else
-    for (
-      nearestMountedAncestor = sourceFiber.return;
-      null !== nearestMountedAncestor;
-
-    ) {
+    for (; null !== nearestMountedAncestor; ) {
       if (3 === nearestMountedAncestor.tag) {
         captureCommitPhaseErrorOnRoot(
           nearestMountedAncestor,
@@ -8167,6 +8192,9 @@ function findNodeHandle(componentOrHandle) {
     ? componentOrHandle.canonical._nativeTag
     : componentOrHandle._nativeTag;
 }
+function onRecoverableError(error) {
+  console.error(error);
+}
 batchedUpdatesImpl = function(fn, a) {
   var prevExecutionContext = executionContext;
   executionContext |= 1;
@@ -8180,10 +8208,10 @@ batchedUpdatesImpl = function(fn, a) {
   }
 };
 var roots = new Map(),
-  devToolsConfig$jscomp$inline_927 = {
+  devToolsConfig$jscomp$inline_930 = {
     findFiberByHostInstance: getInstanceFromInstance,
     bundleType: 0,
-    version: "18.0.0-rc.0-a3bde7974-20220208",
+    version: "18.0.0-rc.0-4de99b3ca-20220221",
     rendererPackageName: "react-native-renderer",
     rendererConfig: {
       getInspectorDataForViewTag: function() {
@@ -8198,11 +8226,11 @@ var roots = new Map(),
       }.bind(null, findNodeHandle)
     }
   };
-var internals$jscomp$inline_1181 = {
-  bundleType: devToolsConfig$jscomp$inline_927.bundleType,
-  version: devToolsConfig$jscomp$inline_927.version,
-  rendererPackageName: devToolsConfig$jscomp$inline_927.rendererPackageName,
-  rendererConfig: devToolsConfig$jscomp$inline_927.rendererConfig,
+var internals$jscomp$inline_1178 = {
+  bundleType: devToolsConfig$jscomp$inline_930.bundleType,
+  version: devToolsConfig$jscomp$inline_930.version,
+  rendererPackageName: devToolsConfig$jscomp$inline_930.rendererPackageName,
+  rendererConfig: devToolsConfig$jscomp$inline_930.rendererConfig,
   overrideHookState: null,
   overrideHookStateDeletePath: null,
   overrideHookStateRenamePath: null,
@@ -8218,26 +8246,26 @@ var internals$jscomp$inline_1181 = {
     return null === fiber ? null : fiber.stateNode;
   },
   findFiberByHostInstance:
-    devToolsConfig$jscomp$inline_927.findFiberByHostInstance ||
+    devToolsConfig$jscomp$inline_930.findFiberByHostInstance ||
     emptyFindFiberByHostInstance,
   findHostInstancesForRefresh: null,
   scheduleRefresh: null,
   scheduleRoot: null,
   setRefreshHandler: null,
   getCurrentFiber: null,
-  reconcilerVersion: "18.0.0-rc.0-a3bde7974-20220208"
+  reconcilerVersion: "18.0.0-rc.0-4de99b3ca-20220221"
 };
 if ("undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) {
-  var hook$jscomp$inline_1182 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
+  var hook$jscomp$inline_1179 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
   if (
-    !hook$jscomp$inline_1182.isDisabled &&
-    hook$jscomp$inline_1182.supportsFiber
+    !hook$jscomp$inline_1179.isDisabled &&
+    hook$jscomp$inline_1179.supportsFiber
   )
     try {
-      (rendererID = hook$jscomp$inline_1182.inject(
-        internals$jscomp$inline_1181
+      (rendererID = hook$jscomp$inline_1179.inject(
+        internals$jscomp$inline_1178
       )),
-        (injectedHook = hook$jscomp$inline_1182);
+        (injectedHook = hook$jscomp$inline_1179);
     } catch (err) {}
 }
 exports.createPortal = function(children, containerTag) {
@@ -8277,7 +8305,13 @@ exports.render = function(element, containerTag, callback, concurrentRoot) {
   var root = roots.get(containerTag);
   root ||
     ((root = concurrentRoot ? 1 : 0),
-    (concurrentRoot = new FiberRootNode(containerTag, root, !1, "", null)),
+    (concurrentRoot = new FiberRootNode(
+      containerTag,
+      root,
+      !1,
+      "",
+      onRecoverableError
+    )),
     (root = createFiber(3, null, null, 1 === root ? 1 : 0)),
     (concurrentRoot.current = root),
     (root.stateNode = concurrentRoot),
