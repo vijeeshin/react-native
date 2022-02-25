@@ -241,8 +241,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
             contentContainerStyle={styles.list}
             viewabilityConfig={VIEWABILITY_CONFIG}
             maintainVisibleContentPosition={{
-              minIndexForVisible: 1,
-              autoscrollToTopThreshold: Number.MIN_SAFE_INTEGER,
+              minIndexForVisible: 0,
             }}
             {...flatListItemRendererProps}
           />
@@ -278,7 +277,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
       return;
     }
     this.setState(state => ({
-      data: state.data.concat(genNewerItems(PAGE_SIZE, state.data.length)),
+      data: state.data.concat(genNewerItems(PAGE_SIZE, state.last)),
       last: state.last + PAGE_SIZE,
     }));
   };
