@@ -13,6 +13,7 @@
 const React = require('react');
 
 const {
+  ActivityIndicator,
   Animated,
   Image,
   Platform,
@@ -158,6 +159,12 @@ class SeparatorComponent extends React.PureComponent<{...}> {
     return <View style={styles.separator} />;
   }
 }
+
+const LoadingComponent: React.ComponentType<{}> = React.memo(() => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator />
+  </View>
+));
 
 class ItemSeparatorComponent extends React.PureComponent<$FlowFixMeProps> {
   render(): React.Node {
@@ -364,6 +371,13 @@ const styles = StyleSheet.create({
   text: {
     flex: 1,
   },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 100,
+    borderTopWidth: 1,
+    borderTopColor: 'rgb(200, 199, 204)',
+  },
 });
 
 module.exports = {
@@ -374,6 +388,7 @@ module.exports = {
   ItemSeparatorComponent,
   PlainInput,
   SeparatorComponent,
+  LoadingComponent,
   Spindicator,
   genNewerItems,
   genOlderItems,

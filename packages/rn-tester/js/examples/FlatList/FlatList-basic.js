@@ -33,6 +33,7 @@ import {
   ItemSeparatorComponent,
   PlainInput,
   SeparatorComponent,
+  LoadingComponent,
   Spindicator,
   genNewerItems,
   genOlderItems,
@@ -44,8 +45,9 @@ import {
 import type {Item} from '../../components/ListExampleShared';
 
 const PAGE_SIZE = 100;
-const INITIAL_PAGE_OFFSET = 5;
 const NUM_PAGES = 10;
+const INITIAL_PAGE_OFFSET = Math.floor(NUM_PAGES / 2);
+const LOAD_TIME = 2000;
 
 const VIEWABILITY_CONFIG = {
   minimumViewTime: 3000,
@@ -56,6 +58,8 @@ const VIEWABILITY_CONFIG = {
 type Props = $ReadOnly<{||}>;
 type State = {|
   data: Array<Item>,
+  first: number,
+  last: number,
   debug: boolean,
   horizontal: boolean,
   inverted: boolean,
@@ -68,6 +72,9 @@ type State = {|
   fadingEdgeLength: number,
   onPressDisabled: boolean,
   textSelectable: boolean,
+  maintainVisibleContentPosition: boolean,
+  previousLoading: boolean,
+  nextLoading: boolean,
 |};
 
 class FlatListExample extends React.PureComponent<Props, State> {
@@ -87,6 +94,9 @@ class FlatListExample extends React.PureComponent<Props, State> {
     fadingEdgeLength: 0,
     onPressDisabled: false,
     textSelectable: true,
+    maintainVisibleContentPosition: true,
+    previousLoading: false,
+    nextLoading: false,
   };
 
   _onChangeFilterText = filterText => {
@@ -189,6 +199,11 @@ class FlatListExample extends React.PureComponent<Props, State> {
                 this.state.useFlatListItemComponent,
                 this._setBooleanValue('useFlatListItemComponent'),
               )}
+              {renderSmallSwitchOption(
+                'Maintain content position',
+                this.state.maintainVisibleContentPosition,
+                this._setBooleanValue('maintainVisibleContentPosition'),
+              )}
               {Platform.OS === 'android' && (
                 <View>
                   <TextInput
@@ -210,8 +225,12 @@ class FlatListExample extends React.PureComponent<Props, State> {
           <Animated.FlatList
             fadingEdgeLength={this.state.fadingEdgeLength}
             ItemSeparatorComponent={ItemSeparatorComponent}
-            ListHeaderComponent={<HeaderComponent />}
-            ListFooterComponent={FooterComponent}
+            ListHeaderComponent={
+              this.state.previousLoading ? LoadingComponent : HeaderComponent
+            }
+            ListFooterComponent={
+              this.state.nextLoading ? LoadingComponent : FooterComponent
+            }
             ListEmptyComponent={ListEmptyComponent}
             data={this.state.empty ? [] : filteredData}
             debug={this.state.debug}
@@ -230,6 +249,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
             keyboardDismissMode="on-drag"
             numColumns={1}
             onStartReached={this._onStartReached}
+            initialScrollIndex={Math.floor(PAGE_SIZE / 2)}
             onEndReached={this._onEndReached}
             onRefresh={this._onRefresh}
             onScroll={
@@ -240,9 +260,11 @@ class FlatListExample extends React.PureComponent<Props, State> {
             refreshing={false}
             contentContainerStyle={styles.list}
             viewabilityConfig={VIEWABILITY_CONFIG}
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-            }}
+            maintainVisibleContentPosition={
+              this.state.maintainVisibleContentPosition
+                ? {minIndexForVisible: 1}
+                : undefined
+            }
             {...flatListItemRendererProps}
           />
         </View>
@@ -263,23 +285,32 @@ class FlatListExample extends React.PureComponent<Props, State> {
     return getItemLayout(data, index, this.state.horizontal);
   };
   _onStartReached = () => {
-    if (this.state.first <= 0) {
+    if (this.state.first <= 0 || this.state.previousLoading) {
       return;
     }
 
-    this.setState(state => ({
-      data: genOlderItems(PAGE_SIZE, state.first).concat(state.data),
-      first: state.first - PAGE_SIZE,
-    }));
+    this.setState({previousLoading: true});
+    setTimeout(() => {
+      this.setState(state => ({
+        previousLoading: false,
+        data: genOlderItems(PAGE_SIZE, state.first).concat(state.data),
+        first: state.first - PAGE_SIZE,
+      }));
+    }, LOAD_TIME);
   };
   _onEndReached = () => {
-    if (this.state.last >= PAGE_SIZE * NUM_PAGES) {
+    if (this.state.last >= PAGE_SIZE * NUM_PAGES || this.state.nextLoading) {
       return;
     }
-    this.setState(state => ({
-      data: state.data.concat(genNewerItems(PAGE_SIZE, state.last)),
-      last: state.last + PAGE_SIZE,
-    }));
+
+    this.setState({nextLoading: true});
+    setTimeout(() => {
+      this.setState(state => ({
+        nextLoading: false,
+        data: state.data.concat(genNewerItems(PAGE_SIZE, state.last)),
+        last: state.last + PAGE_SIZE,
+      }));
+    }, LOAD_TIME);
   };
   _onPressCallback = () => {
     const {onPressDisabled} = this.state;
@@ -337,7 +368,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
 
   _pressItem = (key: string) => {
     this._listRef && this._listRef.recordInteraction();
-    const index = Number(key);
+    const index = this.state.data.findIndex(item => item.key === key);
     const itemState = pressItem(this.state.data[index]);
     this.setState(state => ({
       ...state,
