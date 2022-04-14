@@ -324,6 +324,11 @@ let _keylessItemComponentName: string = '';
 type State = {
   first: number,
   last: number,
+  // Used to track items added at the start of the list for maintainVisibleContentPosition.
+  firstItemKey: ?string,
+  // When using maintainVisibleContentPosition we need to adjust the window to make sure
+  // make sure that the visible elements are still rendered.
+  maintainVisibleContentPositionAdjustment: ?number,
 };
 
 /**
@@ -369,6 +374,40 @@ function scrollEventThrottleOrDefault(scrollEventThrottle: ?number) {
 // windowSizeOrDefault(this.props.windowSize)
 function windowSizeOrDefault(windowSize: ?number) {
   return windowSize ?? 21;
+}
+
+function extractKey(props: Props, item: Item, index: number): string {
+  if (props.keyExtractor != null) {
+    return props.keyExtractor(item, index);
+  }
+
+  const key = defaultKeyExtractor(item, index);
+  if (key === String(index)) {
+    _usedIndexForKey = true;
+    if (item.type && item.type.displayName) {
+      _keylessItemComponentName = item.type.displayName;
+    }
+  }
+  return key;
+}
+
+function findItemIndexWithKey(props: Props, key: string): ?number {
+  for (let ii = 0; ii < props.getItemCount(props.data); ii++) {
+    const item = props.getItem(props.data, ii);
+    const curKey = extractKey(props, item, ii);
+    if (curKey === key) {
+      return ii;
+    }
+  }
+  return null;
+}
+
+function getItemKey(props: Props, index: number): ?string {
+  const item = props.getItem(props.data, index);
+  if (item == null) {
+    return null;
+  }
+  return extractKey(props, item, 0);
 }
 
 /**
@@ -744,6 +783,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
           (this.props.initialScrollIndex || 0) +
             initialNumToRenderOrDefault(this.props.initialNumToRender),
         ) - 1,
+      firstItemKey: getItemKey(this.props, 0),
+      maintainVisibleContentPositionAdjustment: null,
     };
 
     if (this._isNestedWithSameOrientation()) {
@@ -793,10 +834,27 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   }
 
   static getDerivedStateFromProps(newProps: Props, prevState: State): State {
-    const {data, getItemCount} = newProps;
+    const {data, getItemCount, maintainVisibleContentPosition} = newProps;
+    const {firstItemKey: prevFirstItemKey} = prevState;
     const maxToRenderPerBatch = maxToRenderPerBatchOrDefault(
       newProps.maxToRenderPerBatch,
     );
+
+    let maintainVisibleContentPositionAdjustment =
+      prevState.maintainVisibleContentPositionAdjustment;
+    const newFirstItemKey = getItemKey(newProps, 0);
+    if (
+      maintainVisibleContentPosition != null &&
+      maintainVisibleContentPositionAdjustment == null &&
+      prevFirstItemKey != null &&
+      newFirstItemKey != null
+    ) {
+      maintainVisibleContentPositionAdjustment =
+        newFirstItemKey !== prevFirstItemKey
+          ? findItemIndexWithKey(newProps, prevFirstItemKey)
+          : null;
+    }
+
     // first and last could be stale (e.g. if a new, shorter items props is passed in), so we make
     // sure we're rendering a reasonable range here.
     return {
@@ -805,6 +863,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
         Math.min(prevState.first, getItemCount(data) - 1 - maxToRenderPerBatch),
       ),
       last: Math.max(0, Math.min(prevState.last, getItemCount(data) - 1)),
+      firstItemKey: newFirstItemKey,
+      maintainVisibleContentPositionAdjustment,
     };
   }
 
@@ -835,7 +895,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     last = Math.min(end, last);
     for (let ii = first; ii <= last; ii++) {
       const item = getItem(data, ii);
-      const key = this._keyExtractor(item, ii);
+      const key = extractKey(this.props, item, ii);
       this._indicesToKeys.set(ii, key);
       if (stickyIndicesFromProps.has(ii + stickyOffset)) {
         stickyHeaderIndices.push(cells.length);
@@ -889,21 +949,6 @@ class VirtualizedList extends React.PureComponent<Props, State> {
 
   _getSpacerKey = (isVertical: boolean): string =>
     isVertical ? 'height' : 'width';
-
-  _keyExtractor(item: Item, index: number) {
-    if (this.props.keyExtractor != null) {
-      return this.props.keyExtractor(item, index);
-    }
-
-    const key = defaultKeyExtractor(item, index);
-    if (key === String(index)) {
-      _usedIndexForKey = true;
-      if (item.type && item.type.displayName) {
-        _keylessItemComponentName = item.type.displayName;
-      }
-    }
-    return key;
-  }
 
   render(): React.Node {
     if (__DEV__) {
@@ -964,7 +1009,11 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       const lastInitialIndex = this.props.initialScrollIndex
         ? -1
         : initialNumToRenderOrDefault(this.props.initialNumToRender) - 1;
-      const {first, last} = this.state;
+      let {first, last, maintainVisibleContentPositionAdjustment} = this.state;
+      if (maintainVisibleContentPositionAdjustment != null) {
+        first += maintainVisibleContentPositionAdjustment;
+        last += maintainVisibleContentPositionAdjustment;
+      }
       this._pushCells(
         cells,
         stickyHeaderIndices,
@@ -1536,6 +1585,9 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       onEndReachedThreshold,
       initialScrollIndex,
     } = this.props;
+    if (this.state.maintainVisibleContentPositionAdjustment != null) {
+      return;
+    }
     const {contentLength, visibleLength, offset} = this._scrollMetrics;
     const distanceFromStart = offset;
     const distanceFromEnd = contentLength - visibleLength - offset;
@@ -1693,6 +1745,17 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       velocity,
       visibleLength,
     };
+
+    const {maintainVisibleContentPositionAdjustment} = this.state;
+    if (maintainVisibleContentPositionAdjustment != null) {
+      this.setState(state => ({
+        maintainVisibleContentPositionAdjustment: null,
+        // Also update state with adjusted values since previous values are used
+        // in computeWindowedRenderLimits.
+        first: state.first + maintainVisibleContentPositionAdjustment,
+        last: state.last + maintainVisibleContentPositionAdjustment,
+      }));
+    }
     this._updateViewableItems(this.props.data);
     if (!this.props) {
       return;
@@ -1706,7 +1769,10 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   };
 
   _scheduleCellsToRenderUpdate() {
-    const {first, last} = this.state;
+    const {first, last, maintainVisibleContentPositionAdjustment} = this.state;
+    if (maintainVisibleContentPositionAdjustment != null) {
+      return;
+    }
     const {offset, visibleLength, velocity} = this._scrollMetrics;
     const itemCount = this.props.getItemCount(this.props.data);
     let hiPri = false;
@@ -1898,7 +1964,12 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   _createViewToken = (index: number, isViewable: boolean) => {
     const {data, getItem} = this.props;
     const item = getItem(data, index);
-    return {index, item, key: this._keyExtractor(item, index), isViewable};
+    return {
+      index,
+      item,
+      key: extractKey(this.props, item, index),
+      isViewable,
+    };
   };
 
   __getFrameMetricsApprox: (index: number) => {
@@ -1938,7 +2009,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       'Tried to get frame for out of range index ' + index,
     );
     const item = getItem(data, index);
-    let frame = item && this._frames[this._keyExtractor(item, index)];
+    let frame = item && this._frames[extractKey(this.props, item, index)];
     if (!frame || frame.index !== index) {
       if (getItemLayout) {
         frame = getItemLayout(data, index);
@@ -2148,8 +2219,8 @@ class CellRenderer extends React.Component<
       : inversionStyle;
     const result = !CellRendererComponent ? (
       /* $FlowFixMe[incompatible-type-arg] (>=0.89.0 site=react_native_fb) *
-        This comment suppresses an error found when Flow v0.89 was deployed. *
-        To see the error, delete this comment and run Flow. */
+         This comment suppresses an error found when Flow v0.89 was deployed. *
+         To see the error, delete this comment and run Flow. */
       <View style={cellStyle} onLayout={onLayout}>
         {element}
         {itemSeparator}
