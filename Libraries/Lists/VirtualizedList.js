@@ -210,14 +210,26 @@ type OptionalProps = {|
    */
   maxToRenderPerBatch?: ?number,
   /**
+   * Called once when the scroll position gets within `onStartReachedThreshold` of the rendered
+   * content.
+   */
+  onStartReached?: ?(info: {distanceFromStart: number, ...}) => void,
+  /**
+   * How far from the start (in units of visible length of the list) the leading edge of the
+   * list must be from the start of the content to trigger the `onStartReached` callback.
+   * Thus, a value of 0.5 will trigger `onStartReached` when the start of the content is
+   * within half the visible length of the list.
+   */
+  onStartReachedThreshold?: ?number,
+  /**
    * Called once when the scroll position gets within `onEndReachedThreshold` of the rendered
    * content.
    */
   onEndReached?: ?(info: {distanceFromEnd: number, ...}) => void,
   /**
-   * How far from the end (in units of visible length of the list) the bottom edge of the
+   * How far from the end (in units of visible length of the list) the trailing edge of the
    * list must be from the end of the content to trigger the `onEndReached` callback.
-   * Thus a value of 0.5 will trigger `onEndReached` when the end of the content is
+   * Thus, a value of 0.5 will trigger `onEndReached` when the end of the content is
    * within half the visible length of the list.
    */
   onEndReachedThreshold?: ?number,
@@ -311,6 +323,11 @@ let _keylessItemComponentName: string = '';
 type State = {
   first: number,
   last: number,
+  // Used to track items added at the start of the list for maintainVisibleContentPosition.
+  firstItemKey: ?string,
+  // When using maintainVisibleContentPosition we need to adjust the window to make sure
+  // make sure that the visible elements are still rendered.
+  maintainVisibleContentPositionAdjustment: ?number,
 };
 
 /**
@@ -333,9 +350,19 @@ function maxToRenderPerBatchOrDefault(maxToRenderPerBatch: ?number) {
   return maxToRenderPerBatch ?? 10;
 }
 
+// onStartReachedThresholdOrDefault(this.props.onStartReachedThreshold)
+function onStartReachedThresholdOrDefault(onStartReachedThreshold: ?number) {
+  return onStartReachedThreshold ?? 2;
+}
+
 // onEndReachedThresholdOrDefault(this.props.onEndReachedThreshold)
 function onEndReachedThresholdOrDefault(onEndReachedThreshold: ?number) {
   return onEndReachedThreshold ?? 2;
+}
+
+// getScrollingThreshold(visibleLength, onEndReachedThreshold)
+function getScrollingThreshold(threshold: number, visibleLength: number) {
+  return (threshold * visibleLength) / 2;
 }
 
 // scrollEventThrottleOrDefault(this.props.scrollEventThrottle)
@@ -346,6 +373,40 @@ function scrollEventThrottleOrDefault(scrollEventThrottle: ?number) {
 // windowSizeOrDefault(this.props.windowSize)
 function windowSizeOrDefault(windowSize: ?number) {
   return windowSize ?? 21;
+}
+
+function extractKey(props: Props, item: Item, index: number): string {
+  if (props.keyExtractor != null) {
+    return props.keyExtractor(item, index);
+  }
+
+  const key = defaultKeyExtractor(item, index);
+  if (key === String(index)) {
+    _usedIndexForKey = true;
+    if (item.type && item.type.displayName) {
+      _keylessItemComponentName = item.type.displayName;
+    }
+  }
+  return key;
+}
+
+function findItemIndexWithKey(props: Props, key: string): ?number {
+  for (let ii = 0; ii < props.getItemCount(props.data); ii++) {
+    const item = props.getItem(props.data, ii);
+    const curKey = extractKey(props, item, ii);
+    if (curKey === key) {
+      return ii;
+    }
+  }
+  return null;
+}
+
+function getItemKey(props: Props, index: number): ?string {
+  const item = props.getItem(props.data, index);
+  if (item == null) {
+    return null;
+  }
+  return extractKey(props, item, 0);
 }
 
 /**
@@ -384,7 +445,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   scrollToEnd(params?: ?{animated?: ?boolean, ...}) {
     const animated = params ? params.animated : true;
     const veryLast = this.props.getItemCount(this.props.data) - 1;
-    const frame = this._getFrameMetricsApprox(veryLast);
+    const frame = this.__getFrameMetricsApprox(veryLast);
     const offset = Math.max(
       0,
       frame.offset +
@@ -458,7 +519,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       });
       return;
     }
-    const frame = this._getFrameMetricsApprox(index);
+    const frame = this.__getFrameMetricsApprox(index);
     const offset =
       Math.max(
         0,
@@ -721,6 +782,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
           (this.props.initialScrollIndex || 0) +
             initialNumToRenderOrDefault(this.props.initialNumToRender),
         ) - 1,
+      firstItemKey: getItemKey(this.props, 0),
+      maintainVisibleContentPositionAdjustment: null,
     };
 
     if (this._isNestedWithSameOrientation()) {
@@ -770,10 +833,27 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   }
 
   static getDerivedStateFromProps(newProps: Props, prevState: State): State {
-    const {data, getItemCount} = newProps;
+    const {data, getItemCount, maintainVisibleContentPosition} = newProps;
+    const {firstItemKey: prevFirstItemKey} = prevState;
     const maxToRenderPerBatch = maxToRenderPerBatchOrDefault(
       newProps.maxToRenderPerBatch,
     );
+
+    let maintainVisibleContentPositionAdjustment =
+      prevState.maintainVisibleContentPositionAdjustment;
+    const newFirstItemKey = getItemKey(newProps, 0);
+    if (
+      maintainVisibleContentPosition != null &&
+      maintainVisibleContentPositionAdjustment == null &&
+      prevFirstItemKey != null &&
+      newFirstItemKey != null
+    ) {
+      maintainVisibleContentPositionAdjustment =
+        newFirstItemKey !== prevFirstItemKey
+          ? findItemIndexWithKey(newProps, prevFirstItemKey)
+          : null;
+    }
+
     // first and last could be stale (e.g. if a new, shorter items props is passed in), so we make
     // sure we're rendering a reasonable range here.
     return {
@@ -782,6 +862,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
         Math.min(prevState.first, getItemCount(data) - 1 - maxToRenderPerBatch),
       ),
       last: Math.max(0, Math.min(prevState.last, getItemCount(data) - 1)),
+      firstItemKey: newFirstItemKey,
+      maintainVisibleContentPositionAdjustment,
     };
   }
 
@@ -807,7 +889,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     last = Math.min(end, last);
     for (let ii = first; ii <= last; ii++) {
       const item = getItem(data, ii);
-      const key = this._keyExtractor(item, ii);
+      const key = extractKey(this.props, item, ii);
       this._indicesToKeys.set(ii, key);
       if (stickyIndicesFromProps.has(ii + stickyOffset)) {
         stickyHeaderIndices.push(cells.length);
@@ -858,21 +940,6 @@ class VirtualizedList extends React.PureComponent<Props, State> {
 
   _getSpacerKey = (isVertical: boolean): string =>
     isVertical ? 'height' : 'width';
-
-  _keyExtractor(item: Item, index: number) {
-    if (this.props.keyExtractor != null) {
-      return this.props.keyExtractor(item, index);
-    }
-
-    const key = defaultKeyExtractor(item, index);
-    if (key === String(index)) {
-      _usedIndexForKey = true;
-      if (item.type && item.type.displayName) {
-        _keylessItemComponentName = item.type.displayName;
-      }
-    }
-    return key;
-  }
 
   render(): React.Node {
     if (__DEV__) {
@@ -933,7 +1000,11 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       const lastInitialIndex = this.props.initialScrollIndex
         ? -1
         : initialNumToRenderOrDefault(this.props.initialNumToRender) - 1;
-      const {first, last} = this.state;
+      let {first, last, maintainVisibleContentPositionAdjustment} = this.state;
+      if (maintainVisibleContentPositionAdjustment != null) {
+        first += maintainVisibleContentPositionAdjustment;
+        last += maintainVisibleContentPositionAdjustment;
+      }
       this._pushCells(
         cells,
         stickyHeaderIndices,
@@ -950,8 +1021,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
           // See if there are any sticky headers in the virtualized space that we need to render.
           for (let ii = firstAfterInitial - 1; ii > lastInitialIndex; ii--) {
             if (stickyIndicesFromProps.has(ii + stickyOffset)) {
-              const initBlock = this._getFrameMetricsApprox(lastInitialIndex);
-              const stickyBlock = this._getFrameMetricsApprox(ii);
+              const initBlock = this.__getFrameMetricsApprox(lastInitialIndex);
+              const stickyBlock = this.__getFrameMetricsApprox(ii);
               const leadSpace =
                 stickyBlock.offset -
                 initBlock.offset -
@@ -968,7 +1039,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
                 inversionStyle,
               );
               const trailSpace =
-                this._getFrameMetricsApprox(first).offset -
+                this.__getFrameMetricsApprox(first).offset -
                 (stickyBlock.offset + stickyBlock.length);
               cells.push(
                 <View key="$sticky_trail" style={{[spacerKey]: trailSpace}} />,
@@ -979,9 +1050,9 @@ class VirtualizedList extends React.PureComponent<Props, State> {
           }
         }
         if (!insertedStickySpacer) {
-          const initBlock = this._getFrameMetricsApprox(lastInitialIndex);
+          const initBlock = this.__getFrameMetricsApprox(lastInitialIndex);
           const firstSpace =
-            this._getFrameMetricsApprox(first).offset -
+            this.__getFrameMetricsApprox(first).offset -
             (initBlock.offset + initBlock.length);
           cells.push(
             <View key="$lead_spacer" style={{[spacerKey]: firstSpace}} />,
@@ -1005,14 +1076,14 @@ class VirtualizedList extends React.PureComponent<Props, State> {
         this._hasWarned.keys = true;
       }
       if (!isVirtualizationDisabled && last < itemCount - 1) {
-        const lastFrame = this._getFrameMetricsApprox(last);
+        const lastFrame = this.__getFrameMetricsApprox(last);
         // Without getItemLayout, we limit our tail spacer to the _highestMeasuredFrameIndex to
         // prevent the user for hyperscrolling into un-measured area because otherwise content will
         // likely jump around as it renders in above the viewport.
         const end = this.props.getItemLayout
           ? itemCount - 1
           : Math.min(itemCount - 1, this._highestMeasuredFrameIndex);
-        const endFrame = this._getFrameMetricsApprox(end);
+        const endFrame = this.__getFrameMetricsApprox(end);
         const tailSpacerLength =
           endFrame.offset +
           endFrame.length -
@@ -1215,6 +1286,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     visibleLength: 0,
   };
   _scrollRef: ?React.ElementRef<any> = null;
+  _sentStartForContentLength = 0;
   _sentEndForContentLength = 0;
   _totalCellLength = 0;
   _totalCellsMeasured = 0;
@@ -1392,7 +1464,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     }
     this.props.onLayout && this.props.onLayout(e);
     this._scheduleCellsToRenderUpdate();
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
   };
 
   _onLayoutEmpty = e => {
@@ -1419,7 +1491,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     const framesInLayout = [];
     const itemCount = this.props.getItemCount(this.props.data);
     for (let ii = 0; ii < itemCount; ii++) {
-      const frame = this._getFrameMetricsApprox(ii);
+      const frame = this.__getFrameMetricsApprox(ii);
       /* $FlowFixMe[prop-missing] (>=0.68.0 site=react_native_fb) This comment
        * suppresses an error found when Flow v0.68 was deployed. To see the
        * error delete this comment and run Flow. */
@@ -1427,8 +1499,8 @@ class VirtualizedList extends React.PureComponent<Props, State> {
         framesInLayout.push(frame);
       }
     }
-    const windowTop = this._getFrameMetricsApprox(this.state.first).offset;
-    const frameLast = this._getFrameMetricsApprox(this.state.last);
+    const windowTop = this.__getFrameMetricsApprox(this.state.first).offset;
+    const frameLast = this.__getFrameMetricsApprox(this.state.last);
     const windowLen = frameLast.offset + frameLast.length - windowTop;
     const visTop = this._scrollMetrics.offset;
     const visLen = this._scrollMetrics.visibleLength;
@@ -1494,26 +1566,70 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     return !horizontalOrDefault(this.props.horizontal) ? metrics.y : metrics.x;
   }
 
-  _maybeCallOnEndReached() {
-    const {data, getItemCount, onEndReached, onEndReachedThreshold} =
-      this.props;
+  _maybeCallOnEdgeReached() {
+    const {
+      data,
+      getItemCount,
+      onStartReached,
+      onStartReachedThreshold,
+      onEndReached,
+      onEndReachedThreshold,
+      initialScrollIndex,
+    } = this.props;
+    if (this.state.maintainVisibleContentPositionAdjustment != null) {
+      return;
+    }
     const {contentLength, visibleLength, offset} = this._scrollMetrics;
+    const distanceFromStart = offset;
     const distanceFromEnd = contentLength - visibleLength - offset;
-    const threshold =
-      onEndReachedThreshold != null ? onEndReachedThreshold * visibleLength : 2;
+    const startThreshold =
+      onStartReachedThresholdOrDefault(onStartReachedThreshold) * visibleLength;
+    const endThreshold =
+      onEndReachedThresholdOrDefault(onEndReachedThreshold) * visibleLength;
+    const isWithinStartThreshold = distanceFromStart <= startThreshold;
+    const isWithinEndThreshold = distanceFromEnd <= endThreshold;
+    const shouldExecuteNewCallback =
+      this._scrollMetrics.contentLength !== this._sentStartForContentLength &&
+      this._scrollMetrics.contentLength !== this._sentEndForContentLength;
+
+    // First check if the user just scrolled within the end threshold
+    // and call onEndReached only once for a given content length,
+    // and only if onStartReached is not being executed
     if (
       onEndReached &&
-      this.state.last === getItemCount(data) - 1 &&
-      distanceFromEnd < threshold &&
-      this._scrollMetrics.contentLength !== this._sentEndForContentLength
+      isWithinEndThreshold &&
+      shouldExecuteNewCallback &&
+      this.state.last === getItemCount(data) - 1
     ) {
-      // Only call onEndReached once for a given content length
       this._sentEndForContentLength = this._scrollMetrics.contentLength;
       onEndReached({distanceFromEnd});
-    } else if (distanceFromEnd > threshold) {
-      // If the user scrolls away from the end and back again cause
-      // an onEndReached to be triggered again
-      this._sentEndForContentLength = 0;
+    }
+
+    // Next check if the user just scrolled within the start threshold
+    // and call onStartReached only once for a given content length,
+    // and only if onEndReached is not being executed
+    else if (
+      onStartReached &&
+      isWithinStartThreshold &&
+      shouldExecuteNewCallback &&
+      this.state.first === 0 &&
+      // On initial mount when using initialScrollIndex the offset will be 0 initially
+      // and will trigger an unexpected onStartReached.
+      (!initialScrollIndex || this._hasInteracted)
+    ) {
+      this._sentStartForContentLength = this._scrollMetrics.contentLength;
+      onStartReached({distanceFromStart});
+    }
+
+    // If the user scrolls away from the start or end and back again,
+    // cause onStartReached or onEndReached to be triggered again
+    else {
+      this._sentStartForContentLength = isWithinStartThreshold
+        ? this._sentStartForContentLength
+        : 0;
+      this._sentEndForContentLength = isWithinEndThreshold
+        ? this._sentEndForContentLength
+        : 0;
     }
   }
 
@@ -1521,8 +1637,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     if (
       width > 0 &&
       height > 0 &&
-      this.props.initialScrollIndex != null &&
-      this.props.initialScrollIndex > 0 &&
+      this.props.initialScrollIndex &&
       !this._hasDoneInitialScroll
     ) {
       if (this.props.contentOffset == null) {
@@ -1538,7 +1653,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
     }
     this._scrollMetrics.contentLength = this._selectLength({height, width});
     this._scheduleCellsToRenderUpdate();
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
   };
 
   /* Translates metrics from a scroll event in a parent VirtualizedList into
@@ -1618,11 +1733,22 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       velocity,
       visibleLength,
     };
+
+    const {maintainVisibleContentPositionAdjustment} = this.state;
+    if (maintainVisibleContentPositionAdjustment != null) {
+      this.setState(state => ({
+        maintainVisibleContentPositionAdjustment: null,
+        // Also update state with adjusted values since previous values are used
+        // in computeWindowedRenderLimits.
+        first: state.first + maintainVisibleContentPositionAdjustment,
+        last: state.last + maintainVisibleContentPositionAdjustment,
+      }));
+    }
     this._updateViewableItems(this.props.data);
     if (!this.props) {
       return;
     }
-    this._maybeCallOnEndReached();
+    this._maybeCallOnEdgeReached();
     if (velocity !== 0) {
       this._fillRateHelper.activate();
     }
@@ -1631,30 +1757,41 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   };
 
   _scheduleCellsToRenderUpdate() {
-    const {first, last} = this.state;
+    const {first, last, maintainVisibleContentPositionAdjustment} = this.state;
+    if (maintainVisibleContentPositionAdjustment != null) {
+      return;
+    }
     const {offset, visibleLength, velocity} = this._scrollMetrics;
     const itemCount = this.props.getItemCount(this.props.data);
     let hiPri = false;
+    const onStartReachedThreshold = onStartReachedThresholdOrDefault(
+      this.props.onStartReachedThreshold,
+    );
     const onEndReachedThreshold = onEndReachedThresholdOrDefault(
       this.props.onEndReachedThreshold,
     );
-    const scrollingThreshold = (onEndReachedThreshold * visibleLength) / 2;
     // Mark as high priority if we're close to the start of the first item
     // But only if there are items before the first rendered item
     if (first > 0) {
-      const distTop = offset - this._getFrameMetricsApprox(first).offset;
+      const distStart = offset - this.__getFrameMetricsApprox(first).offset;
       hiPri =
-        hiPri || distTop < 0 || (velocity < -2 && distTop < scrollingThreshold);
+        hiPri ||
+        distStart < 0 ||
+        (velocity < -2 &&
+          distStart <
+            getScrollingThreshold(onStartReachedThreshold, visibleLength));
     }
     // Mark as high priority if we're close to the end of the last item
     // But only if there are items after the last rendered item
     if (last < itemCount - 1) {
       const distBottom =
-        this._getFrameMetricsApprox(last).offset - (offset + visibleLength);
+        this.__getFrameMetricsApprox(last).offset - (offset + visibleLength);
       hiPri =
         hiPri ||
         distBottom < 0 ||
-        (velocity > 2 && distBottom < scrollingThreshold);
+        (velocity > 2 &&
+          distBottom <
+            getScrollingThreshold(onEndReachedThreshold, visibleLength));
     }
     // Only trigger high-priority updates if we've actually rendered cells,
     // and with that size estimate, accurately compute how many cells we should render.
@@ -1752,7 +1889,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
               maxToRenderPerBatchOrDefault(this.props.maxToRenderPerBatch),
               windowSizeOrDefault(this.props.windowSize),
               state,
-              this._getFrameMetricsApprox,
+              this.__getFrameMetricsApprox,
               this._scrollMetrics,
             );
           }
@@ -1812,16 +1949,19 @@ class VirtualizedList extends React.PureComponent<Props, State> {
   _createViewToken = (index: number, isViewable: boolean) => {
     const {data, getItem} = this.props;
     const item = getItem(data, index);
-    return {index, item, key: this._keyExtractor(item, index), isViewable};
+    return {
+      index,
+      item,
+      key: extractKey(this.props, item, index),
+      isViewable,
+    };
   };
 
-  _getFrameMetricsApprox = (
-    index: number,
-  ): {
+  __getFrameMetricsApprox: (index: number) => {
     length: number,
     offset: number,
     ...
-  } => {
+  } = index => {
     const frame = this._getFrameMetrics(index);
     if (frame && frame.index === index) {
       // check for invalid frames due to row re-ordering
@@ -1854,7 +1994,7 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       'Tried to get frame for out of range index ' + index,
     );
     const item = getItem(data, index);
-    let frame = item && this._frames[this._keyExtractor(item, index)];
+    let frame = item && this._frames[extractKey(this.props, item, index)];
     if (!frame || frame.index !== index) {
       if (getItemLayout) {
         frame = getItemLayout(data, index);
@@ -2058,8 +2198,8 @@ class CellRenderer extends React.Component<
       : inversionStyle;
     const result = !CellRendererComponent ? (
       /* $FlowFixMe[incompatible-type-arg] (>=0.89.0 site=react_native_fb) *
-        This comment suppresses an error found when Flow v0.89 was deployed. *
-        To see the error, delete this comment and run Flow. */
+         This comment suppresses an error found when Flow v0.89 was deployed. *
+         To see the error, delete this comment and run Flow. */
       <View style={cellStyle} onLayout={onLayout}>
         {element}
         {itemSeparator}

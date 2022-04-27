@@ -95,8 +95,8 @@
   CGSize contentSize = self.contentSize;
   UIEdgeInsets contentInset = self.contentInset;
   CGSize fullSize = CGSizeMake(
-      contentSize.width + contentInset.left + contentInset.right,
-      contentSize.height + contentInset.top + contentInset.bottom);
+          contentSize.width + contentInset.left + contentInset.right,
+          contentSize.height + contentInset.top + contentInset.bottom);
 
   rect = CGRectIntersection((CGRect){CGPointZero, fullSize}, rect);
   if (CGRectIsNull(rect)) {
@@ -180,8 +180,8 @@
   }
 
   super.contentOffset = CGPointMake(
-      RCTSanitizeNaNValue(contentOffset.x, @"scrollView.contentOffset.x"),
-      RCTSanitizeNaNValue(contentOffset.y, @"scrollView.contentOffset.y"));
+          RCTSanitizeNaNValue(contentOffset.x, @"scrollView.contentOffset.x"),
+          RCTSanitizeNaNValue(contentOffset.y, @"scrollView.contentOffset.y"));
 }
 
 - (void)setFrame:(CGRect)frame
@@ -210,8 +210,8 @@
       return;
     }
     self.contentOffset = CGPointMake(
-        MAX(-contentInset.left, MIN(xMaxOffset, originalOffset.x)),
-        MAX(-contentInset.top, MIN(yMaxOffset, originalOffset.y)));
+            MAX(-contentInset.left, MIN(xMaxOffset, originalOffset.x)),
+            MAX(-contentInset.top, MIN(yMaxOffset, originalOffset.y)));
   }
 }
 
@@ -292,8 +292,8 @@ static inline UIViewAnimationOptions animationOptionsWithCurve(UIViewAnimationCu
   // UIViewAnimationCurve #7 is used for keyboard and therefore private - so we can't use switch/case here.
   // source: https://stackoverflow.com/a/7327374/5281431
   RCTAssert(
-      UIViewAnimationCurveLinear << 16 == UIViewAnimationOptionCurveLinear,
-      @"Unexpected implementation of UIViewAnimationCurve");
+          UIViewAnimationCurveLinear << 16 == UIViewAnimationOptionCurveLinear,
+          @"Unexpected implementation of UIViewAnimationCurve");
   return curve << 16;
 }
 
@@ -308,7 +308,7 @@ static inline UIViewAnimationOptions animationOptionsWithCurve(UIViewAnimationCu
 
   double duration = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
   UIViewAnimationCurve curve =
-      (UIViewAnimationCurve)[notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] unsignedIntegerValue];
+  (UIViewAnimationCurve)[notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] unsignedIntegerValue];
   CGRect beginFrame = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
   CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
 
@@ -335,9 +335,9 @@ static inline UIViewAnimationOptions animationOptionsWithCurve(UIViewAnimationCu
                         delay:0.0
                       options:animationOptionsWithCurve(curve)
                    animations:^{
-                     self->_scrollView.contentInset = newEdgeInsets;
-                     self->_scrollView.scrollIndicatorInsets = newEdgeInsets;
-                     [self scrollToOffset:newContentOffset animated:NO];
+                       self->_scrollView.contentInset = newEdgeInsets;
+                       self->_scrollView.scrollIndicatorInsets = newEdgeInsets;
+                       [self scrollToOffset:newContentOffset animated:NO];
                    }
                    completion:nil];
 }
@@ -379,8 +379,8 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame : (CGRect)frame)
 RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder : (NSCoder *)aDecoder)
 
 static inline void RCTApplyTransformationAccordingLayoutDirection(
-    UIView *view,
-    UIUserInterfaceLayoutDirection layoutDirection)
+        UIView *view,
+        UIUserInterfaceLayoutDirection layoutDirection)
 {
   view.transform = layoutDirection == UIUserInterfaceLayoutDirectionLeftToRight ? CGAffineTransformIdentity
                                                                                 : CGAffineTransformMakeScale(-1, 1);
@@ -409,9 +409,9 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
     }
   } else {
     RCTAssert(
-        _contentView == nil,
-        @"RCTScrollView may only contain a single subview, the already set subview looks like: %@",
-        [_contentView react_recursiveDescription]);
+            _contentView == nil,
+            @"RCTScrollView may only contain a single subview, the already set subview looks like: %@",
+            [_contentView react_recursiveDescription]);
     _contentView = view;
     RCTApplyTransformationAccordingLayoutDirection(_contentView, self.reactLayoutDirection);
     [_scrollView addSubview:view];
@@ -479,7 +479,7 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
   UIView<RCTCustomRefreshContolProtocol> *refreshControl = _scrollView.customRefreshControl;
   if (refreshControl && refreshControl.isRefreshing && ![refreshControl isKindOfClass:UIRefreshControl.class]) {
     refreshControl.frame =
-        (CGRect){_scrollView.contentOffset, {_scrollView.frame.size.width, refreshControl.frame.size.height}};
+            (CGRect){_scrollView.contentOffset, {_scrollView.frame.size.width, refreshControl.frame.size.height}};
   }
 #endif
 
@@ -502,10 +502,10 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
   const BOOL scrollsVertically = contentSize.height > bounds.size.height;
 
   const BOOL shouldClipAgain = CGRectIsNull(_lastClippedToRect) || !CGRectEqualToRect(_lastClippedToRect, bounds) ||
-      (scrollsHorizontally &&
-       (bounds.size.width < leeway || fabs(_lastClippedToRect.origin.x - bounds.origin.x) >= leeway)) ||
-      (scrollsVertically &&
-       (bounds.size.height < leeway || fabs(_lastClippedToRect.origin.y - bounds.origin.y) >= leeway));
+                               (scrollsHorizontally &&
+                                (bounds.size.width < leeway || fabs(_lastClippedToRect.origin.x - bounds.origin.x) >= leeway)) ||
+                               (scrollsVertically &&
+                                (bounds.size.height < leeway || fabs(_lastClippedToRect.origin.y - bounds.origin.y) >= leeway));
 
   if (shouldClipAgain) {
     const CGRect clipRect = CGRectInset(clipView.bounds, -leeway, -leeway);
@@ -542,16 +542,16 @@ static inline void RCTApplyTransformationAccordingLayoutDirection(
 {
   if (!CGPointEqualToPoint(_scrollView.contentOffset, offset)) {
     CGRect maxRect = CGRectMake(
-        fmin(-_scrollView.contentInset.left, 0),
-        fmin(-_scrollView.contentInset.top, 0),
-        fmax(
-            _scrollView.contentSize.width - _scrollView.bounds.size.width + _scrollView.contentInset.right +
-                fmax(_scrollView.contentInset.left, 0),
-            0.01),
-        fmax(
-            _scrollView.contentSize.height - _scrollView.bounds.size.height + _scrollView.contentInset.bottom +
-                fmax(_scrollView.contentInset.top, 0),
-            0.01)); // Make width and height greater than 0
+            fmin(-_scrollView.contentInset.left, 0),
+            fmin(-_scrollView.contentInset.top, 0),
+            fmax(
+                    _scrollView.contentSize.width - _scrollView.bounds.size.width + _scrollView.contentInset.right +
+                    fmax(_scrollView.contentInset.left, 0),
+                    0.01),
+            fmax(
+                    _scrollView.contentSize.height - _scrollView.bounds.size.height + _scrollView.contentInset.bottom +
+                    fmax(_scrollView.contentInset.top, 0),
+                    0.01)); // Make width and height greater than 0
     // Ensure at least one scroll event will fire
     _allowNextScrollNoMatterWhat = YES;
     if (!CGRectContainsPoint(maxRect, offset) && !self.scrollToOverflowEnabled) {
@@ -777,8 +777,8 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
     CGFloat fractionalIndex = (targetContentOffsetAlongAxis + alignmentOffset) / snapToIntervalF;
 
     NSInteger snapIndex = velocityAlongAxis > 0.0 ? ceil(fractionalIndex)
-        : velocityAlongAxis < 0.0                 ? floor(fractionalIndex)
-                                                  : round(fractionalIndex);
+                                                  : velocityAlongAxis < 0.0                 ? floor(fractionalIndex)
+                                                                                            : round(fractionalIndex);
     CGFloat newTargetContentOffset = (snapIndex * snapToIntervalF) - alignmentOffset;
 
     // Set new targetContentOffset
@@ -790,14 +790,14 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
   }
 
   NSDictionary *userData = @{
-    @"velocity" : @{@"x" : @(velocity.x), @"y" : @(velocity.y)},
-    @"targetContentOffset" : @{@"x" : @(targetContentOffset->x), @"y" : @(targetContentOffset->y)}
+          @"velocity" : @{@"x" : @(velocity.x), @"y" : @(velocity.y)},
+          @"targetContentOffset" : @{@"x" : @(targetContentOffset->x), @"y" : @(targetContentOffset->y)}
   };
   RCT_SEND_SCROLL_EVENT(onScrollEndDrag, userData);
   RCT_FORWARD_SCROLL_EVENT(scrollViewWillEndDragging
-                           : scrollView withVelocity
-                           : velocity targetContentOffset
-                           : targetContentOffset);
+                             : scrollView withVelocity
+    : velocity targetContentOffset
+    : targetContentOffset);
 }
 
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
@@ -866,8 +866,8 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
   if (_automaticallyAdjustContentInsets) {
     UIEdgeInsets contentInsets = RCTContentInsets(self);
     viewportSize = CGSizeMake(
-        self.bounds.size.width - contentInsets.left - contentInsets.right,
-        self.bounds.size.height - contentInsets.top - contentInsets.bottom);
+            self.bounds.size.width - contentInsets.left - contentInsets.right,
+            self.bounds.size.height - contentInsets.top - contentInsets.bottom);
   }
   return viewportSize;
 }
@@ -904,7 +904,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
   RCTAssertUIManagerQueue();
 
   [manager prependUIBlock:^(
-               __unused RCTUIManager *uiManager, __unused NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+          __unused RCTUIManager *uiManager, __unused NSDictionary<NSNumber *, UIView *> *viewRegistry) {
     BOOL horz = [self isHorizontal:self->_scrollView];
     NSUInteger minIdx = [self->_maintainVisibleContentPosition[@"minIndexForVisible"] integerValue];
     for (NSUInteger ii = minIdx; ii < self->_contentView.subviews.count; ++ii) {
@@ -918,7 +918,7 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
         hasNewView = subview.frame.origin.x > x;
       } else {
         CGFloat bottomInset =
-            self.inverted ? self->_scrollView.contentInset.top : self->_scrollView.contentInset.bottom;
+                self.inverted ? self->_scrollView.contentInset.top : self->_scrollView.contentInset.bottom;
         CGFloat y = self->_scrollView.contentOffset.y + bottomInset;
         hasNewView = subview.frame.origin.y > y;
       }
@@ -941,10 +941,10 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
         CGFloat leftInset = self.inverted ? self->_scrollView.contentInset.right : self->_scrollView.contentInset.left;
         CGFloat x = self->_scrollView.contentOffset.x + leftInset;
         self->_scrollView.contentOffset =
-            CGPointMake(self->_scrollView.contentOffset.x + deltaX, self->_scrollView.contentOffset.y);
+                CGPointMake(self->_scrollView.contentOffset.x + deltaX, self->_scrollView.contentOffset.y);
         if (autoscrollThreshold != nil) {
           // If the offset WAS within the threshold of the start, animate to the start.
-          if (x - deltaX <= [autoscrollThreshold integerValue]) {
+          if (x <= [autoscrollThreshold integerValue]) {
             [self scrollToOffset:CGPointMake(-leftInset, self->_scrollView.contentOffset.y) animated:YES];
           }
         }
@@ -954,13 +954,13 @@ RCT_SCROLL_EVENT_HANDLER(scrollViewDidScrollToTop, onScrollToTop)
       CGFloat deltaY = newFrame.origin.y - self->_prevFirstVisibleFrame.origin.y;
       if (ABS(deltaY) > 0.1) {
         CGFloat bottomInset =
-            self.inverted ? self->_scrollView.contentInset.top : self->_scrollView.contentInset.bottom;
+                self.inverted ? self->_scrollView.contentInset.top : self->_scrollView.contentInset.bottom;
         CGFloat y = self->_scrollView.contentOffset.y + bottomInset;
         self->_scrollView.contentOffset =
-            CGPointMake(self->_scrollView.contentOffset.x, self->_scrollView.contentOffset.y + deltaY);
+                CGPointMake(self->_scrollView.contentOffset.x, self->_scrollView.contentOffset.y + deltaY);
         if (autoscrollThreshold != nil) {
           // If the offset WAS within the threshold of the start, animate to the start.
-          if (y - deltaY <= [autoscrollThreshold integerValue]) {
+          if (y <= [autoscrollThreshold integerValue]) {
             [self scrollToOffset:CGPointMake(self->_scrollView.contentOffset.x, -bottomInset) animated:YES];
           }
         }
