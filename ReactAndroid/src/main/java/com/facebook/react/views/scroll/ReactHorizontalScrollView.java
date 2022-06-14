@@ -20,6 +20,7 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
 import android.view.FocusFinder;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -49,6 +50,9 @@ import com.facebook.react.views.scroll.ReactScrollViewHelper.HasFlingAnimator;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasScrollState;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.ReactScrollViewScrollState;
 import com.facebook.react.views.view.ReactViewBackgroundManager;
+import com.facebook.react.views.view.ReactViewGroup;
+
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +60,8 @@ import java.util.List;
 /** Similar to {@link ReactScrollView} but only supports horizontal scrolling. */
 public class ReactHorizontalScrollView extends HorizontalScrollView
     implements ReactClippingViewGroup,
+        ViewGroup.OnHierarchyChangeListener,
+        View.OnLayoutChangeListener,
         FabricViewStateManager.HasFabricViewStateManager,
         ReactOverflowViewWithInset,
         HasScrollState,
@@ -98,10 +104,16 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
   private boolean mSnapToStart = true;
   private boolean mSnapToEnd = true;
   private int mSnapToAlignment = SNAP_ALIGNMENT_DISABLED;
+  private View mContentView;
   private ReactViewBackgroundManager mReactBackgroundManager;
   private boolean mPagedArrowScrolling = false;
   private int pendingContentOffsetX = UNSET_CONTENT_OFFSET;
   private int pendingContentOffsetY = UNSET_CONTENT_OFFSET;
+  private @Nullable ReactScrollViewMaintainVisibleContentPositionData mMaintainVisibleContentPositionData;
+  private @Nullable WeakReference<View> firstVisibleViewForMaintainVisibleContentPosition = null;
+  private @Nullable Rect prevFirstVisibleFrameForMaintainVisibleContentPosition = null;
+  private final Handler mHandler = new Handler();
+  private final Runnable mComputeFirstVisibleViewRunnable = this::computeFirstVisibleItemForMaintainVisibleContentPosition;
   private final FabricViewStateManager mFabricViewStateManager = new FabricViewStateManager();
   private final ReactScrollViewScrollState mReactScrollViewScrollState;
   private final ValueAnimator DEFAULT_FLING_ANIMATOR = ObjectAnimator.ofInt(this, "scrollX", 0, 0);
@@ -136,6 +148,7 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
         });
 
     mScroller = getOverScrollerFromParent();
+    setOnHierarchyChangeListener(this);
     mReactScrollViewScrollState =
         new ReactScrollViewScrollState(
             I18nUtil.getInstance().isRTL(context)
@@ -251,6 +264,14 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
   public void setOverflow(String overflow) {
     mOverflow = overflow;
     invalidate();
+  }
+
+  public void setMaintainVisibleContentPosition(
+    ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData) {
+    mMaintainVisibleContentPositionData = maintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData != null) {
+      computeFirstVisibleItemForMaintainVisibleContentPosition();
+    }
   }
 
   @Override
@@ -434,6 +455,14 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
     super.onScrollChanged(x, y, oldX, oldY);
 
     mActivelyScrolling = true;
+
+    if (mMaintainVisibleContentPositionData != null) {
+      // We don't want to compute the first visible view everytime onScrollChanged gets called (can
+      // be multiple times per second).
+      // The following logic debounces the computation by 100ms (arbitrary value).
+      mHandler.removeCallbacks(mComputeFirstVisibleViewRunnable);
+      mHandler.postDelayed(mComputeFirstVisibleViewRunnable, 100);
+    }
 
     if (mOnScrollDispatchHelper.onScrollChanged(x, y)) {
       if (mRemoveClippedSubviews) {
@@ -1164,6 +1193,18 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
     mReactBackgroundManager.setBorderStyle(style);
   }
 
+  @Override
+  public void onChildViewAdded(View parent, View child) {
+    mContentView = child;
+    mContentView.addOnLayoutChangeListener(this);
+  }
+
+  @Override
+  public void onChildViewRemoved(View parent, View child) {
+    mContentView.removeOnLayoutChangeListener(this);
+    mContentView = null;
+  }
+
   /**
    * Calls `smoothScrollTo` and updates state.
    *
@@ -1217,6 +1258,97 @@ public class ReactHorizontalScrollView extends HorizontalScrollView
     } else {
       pendingContentOffsetX = x;
       pendingContentOffsetY = y;
+    }
+  }
+
+  /**
+   * Called when a mContentView's layout has changed. Fixes the scroll position depending on
+   * maintainVisibleContentPosition
+   */
+  @Override
+  public void onLayoutChange(
+    View v,
+    int left,
+    int top,
+    int right,
+    int bottom,
+    int oldLeft,
+    int oldTop,
+    int oldRight,
+    int oldBottom) {
+    if (mContentView == null) {
+      return;
+    }
+
+    if (this.mMaintainVisibleContentPositionData != null) {
+      scrollMaintainVisibleContentPosition();
+    }
+  }
+
+  /**
+   * Called when maintainVisibleContentPosition is used and after a scroll. Finds the first
+   * completely visible view in the ScrollView and stores it for later use.
+   */
+  private void computeFirstVisibleItemForMaintainVisibleContentPosition() {
+    ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData =
+      mMaintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData == null) return;
+
+    int currentScrollX = getScrollX();
+    int minIdx = maintainVisibleContentPositionData.minIndexForVisible;
+
+    ReactViewGroup contentView = (ReactViewGroup) getChildAt(0);
+    if (contentView == null) return;
+
+    for (int i = minIdx; i < contentView.getChildCount(); i++) {
+      // Find the first entirely visible view. This must be done after we update the content offset
+      // or it will tend to grab rows that were made visible by the shift in position
+      View child = contentView.getChildAt(i);
+      if (child.getX() >= currentScrollX || i == contentView.getChildCount() - 1) {
+        firstVisibleViewForMaintainVisibleContentPosition = new WeakReference<>(child);
+        Rect frame = new Rect();
+        child.getHitRect(frame);
+        prevFirstVisibleFrameForMaintainVisibleContentPosition = frame;
+        break;
+      }
+    }
+  }
+
+  /**
+   * Called when maintainVisibleContentPosition is used and after a layout change. Detects if the
+   * layout change impacts the scroll position and corrects it if needed.
+   */
+  private void scrollMaintainVisibleContentPosition() {
+    ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData =
+      this.mMaintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData == null) return;
+
+    int currentScrollX = getScrollX();
+
+    View firstVisibleView =
+      firstVisibleViewForMaintainVisibleContentPosition != null
+        ? firstVisibleViewForMaintainVisibleContentPosition.get()
+        : null;
+    if (firstVisibleView == null) return;
+    Rect prevFirstVisibleFrame = this.prevFirstVisibleFrameForMaintainVisibleContentPosition;
+    if (prevFirstVisibleFrame == null) return;
+
+    Rect newFrame = new Rect();
+    firstVisibleView.getHitRect(newFrame);
+    int deltaX = newFrame.left - prevFirstVisibleFrame.left;
+
+    if (Math.abs(deltaX) > 1) {
+      int scrollXTo = getScrollX() + deltaX;
+
+      scrollTo(scrollXTo, getScrollY());
+
+      Integer autoScrollThreshold = maintainVisibleContentPositionData.autoScrollToTopThreshold;
+      if (autoScrollThreshold != null) {
+        // If the offset WAS within the threshold of the start, animate to the start.
+        if (currentScrollX - deltaX <= autoScrollThreshold) {
+          reactSmoothScrollTo(0, getScrollY());
+        }
+      }
     }
   }
 

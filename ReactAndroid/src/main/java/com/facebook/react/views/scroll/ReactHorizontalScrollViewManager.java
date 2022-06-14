@@ -323,6 +323,23 @@ public class ReactHorizontalScrollViewManager extends ViewGroupManager<ReactHori
     }
   }
 
+  @ReactProp(name = "maintainVisibleContentPosition")
+  public void setMaintainVisibleContentPosition(ReactHorizontalScrollView view, ReadableMap value) {
+    if (value != null) {
+      int minIndexForVisible = value.getInt("minIndexForVisible");
+      Integer autoScrollToTopThreshold =
+        value.hasKey("autoscrollToTopThreshold")
+          ? value.getInt("autoscrollToTopThreshold")
+          : null;
+      ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData =
+        new ReactScrollViewMaintainVisibleContentPositionData(
+          minIndexForVisible, autoScrollToTopThreshold);
+      view.setMaintainVisibleContentPosition(maintainVisibleContentPositionData);
+    } else {
+      view.setMaintainVisibleContentPosition(null);
+    }
+  }
+
   @ReactProp(name = ViewProps.POINTER_EVENTS)
   public void setPointerEvents(ReactHorizontalScrollView view, @Nullable String pointerEventsStr) {
     view.setPointerEvents(PointerEvents.parsePointerEvents(pointerEventsStr));

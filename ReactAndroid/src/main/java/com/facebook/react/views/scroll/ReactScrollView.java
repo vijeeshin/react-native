@@ -20,11 +20,13 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.util.Log;
 import android.widget.OverScroller;
 import android.widget.ScrollView;
 import androidx.annotation.Nullable;
@@ -45,6 +47,9 @@ import com.facebook.react.views.scroll.ReactScrollViewHelper.HasFlingAnimator;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasScrollState;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.ReactScrollViewScrollState;
 import com.facebook.react.views.view.ReactViewBackgroundManager;
+import com.facebook.react.views.view.ReactViewGroup;
+
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -98,11 +103,17 @@ public class ReactScrollView extends ScrollView
   private ReactViewBackgroundManager mReactBackgroundManager;
   private int pendingContentOffsetX = UNSET_CONTENT_OFFSET;
   private int pendingContentOffsetY = UNSET_CONTENT_OFFSET;
+  private @Nullable ReactScrollViewMaintainVisibleContentPositionData mMaintainVisibleContentPositionData;
+  private @Nullable WeakReference<View> firstVisibleViewForMaintainVisibleContentPosition = null;
+  private @Nullable Rect prevFirstVisibleFrameForMaintainVisibleContentPosition = null;
   private final FabricViewStateManager mFabricViewStateManager = new FabricViewStateManager();
   private final ReactScrollViewScrollState mReactScrollViewScrollState =
       new ReactScrollViewScrollState(ViewCompat.LAYOUT_DIRECTION_LTR);
   private final ValueAnimator DEFAULT_FLING_ANIMATOR = ObjectAnimator.ofInt(this, "scrollY", 0, 0);
   private PointerEvents mPointerEvents = PointerEvents.AUTO;
+
+  private final Handler mHandler = new Handler();
+  private final Runnable mComputeFirstVisibleViewRunnable = this::computeFirstVisibleItemForMaintainVisibleContentPosition;
 
   public ReactScrollView(Context context) {
     this(context, null);
@@ -228,6 +239,14 @@ public class ReactScrollView extends ScrollView
     invalidate();
   }
 
+  public void setMaintainVisibleContentPosition(ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData) {
+    Log.d("RORY_DEBUG", "Setting maintainVisibleContentPosition!");
+    mMaintainVisibleContentPositionData = maintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData != null) {
+      computeFirstVisibleItemForMaintainVisibleContentPosition();
+    }
+  }
+
   @Override
   public @Nullable String getOverflow() {
     return mOverflow;
@@ -253,6 +272,7 @@ public class ReactScrollView extends ScrollView
 
   @Override
   protected void onLayout(boolean changed, int l, int t, int r, int b) {
+    Log.d("RORY_DEBUG", "onLayout");
     // Call with the present values in order to re-layout if necessary
     // If a "pending" value has been set, we restore that value.
     // That value gets cleared by reactScrollTo.
@@ -262,6 +282,10 @@ public class ReactScrollView extends ScrollView
         pendingContentOffsetY != UNSET_CONTENT_OFFSET ? pendingContentOffsetY : getScrollY();
     scrollTo(scrollToX, scrollToY);
     ReactScrollViewHelper.emitLayoutEvent(this);
+
+    if (mMaintainVisibleContentPositionData != null && firstVisibleViewForMaintainVisibleContentPosition == null) {
+      computeFirstVisibleItemForMaintainVisibleContentPosition();
+    }
   }
 
   @Override
@@ -311,6 +335,7 @@ public class ReactScrollView extends ScrollView
 
   @Override
   protected void onScrollChanged(int x, int y, int oldX, int oldY) {
+    Log.d("RORY_DEBUG", "onScrollChanged");
     super.onScrollChanged(x, y, oldX, oldY);
 
     mActivelyScrolling = true;
@@ -324,6 +349,14 @@ public class ReactScrollView extends ScrollView
           this,
           mOnScrollDispatchHelper.getXFlingVelocity(),
           mOnScrollDispatchHelper.getYFlingVelocity());
+    }
+
+    if (mMaintainVisibleContentPositionData != null) {
+      // We don't want to compute the first visible view everytime onScrollChanged gets called (can
+      // be multiple times per second).
+      // The following logic debounces the computation by 100ms (arbitrary value).
+      mHandler.removeCallbacks(mComputeFirstVisibleViewRunnable);
+      mHandler.postDelayed(mComputeFirstVisibleViewRunnable, 100);
     }
   }
 
@@ -1011,10 +1044,144 @@ public class ReactScrollView extends ScrollView
       return;
     }
 
+    Log.d("RORY_DEBUG", "onLayoutChange – top: " + top + " oldTop: " + oldTop);
+    if (prevFirstVisibleFrameForMaintainVisibleContentPosition != null) {
+      Log.d("RORY_DEBUG", "prev first visible view top: " + prevFirstVisibleFrameForMaintainVisibleContentPosition.top);
+    }
+
+    if (this.mMaintainVisibleContentPositionData != null) {
+//      if (this.prevFirstVisibleFrameForMaintainVisibleContentPosition == null) {
+//        mHandler.removeCallbacks(mComputeFirstVisibleViewRunnable);
+//        computeFirstVisibleItemForMaintainVisibleContentPosition();
+//      }
+
+      scrollMaintainVisibleContentPosition();
+    }
+
     int currentScrollY = getScrollY();
     int maxScrollY = getMaxScrollY();
     if (currentScrollY > maxScrollY) {
       scrollTo(getScrollX(), maxScrollY);
+    }
+  }
+
+  /**
+   * Called when maintainVisibleContentPosition is used and after a scroll. Finds the first
+   * completely visible view in the ScrollView and stores it for later use.
+   */
+  private void computeFirstVisibleItemForMaintainVisibleContentPosition() {
+    Log.d("RORY_DEBUG", "computeFirstVisibleItemForMaintainVisibleContentPosition");
+
+    ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData = mMaintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData == null) {
+      Log.d("RORY_DEBUG", "Found null maintainVisibleContentPosition data");
+      return;
+    }
+
+    ReactViewGroup contentView = (ReactViewGroup) mContentView;
+    if (contentView == null) {
+      Log.d("RORY_DEBUG", "Found null contentView");
+      return;
+    }
+
+    int currentScrollY = getScrollY();
+    int minIdx = maintainVisibleContentPositionData.minIndexForVisible;
+    for (int i = minIdx; i < contentView.getChildCount(); i++) {
+      // Find the first entirely visible view. This must be done after we update the content offset
+      // or it will tend to grab rows that were made visible by the shift in position
+      View child = contentView.getChildAt(i);
+      if (child.getY() >= currentScrollY || i == contentView.getChildCount() - 1) {
+        Log.d("RORY_DEBUG", "First fully visible child is at index " + i);
+        firstVisibleViewForMaintainVisibleContentPosition = new WeakReference<>(child);
+        Rect frame = new Rect();
+        child.getHitRect(frame);
+        prevFirstVisibleFrameForMaintainVisibleContentPosition = frame;
+        break;
+      }
+    }
+
+//    // Find the first entirely visible view. This must be done after we update the content offset
+//    // or it will tend to grab rows that were made visible by the shift in position
+//    int currentScrollY = getScrollY();
+//    int min = maintainVisibleContentPositionData.minIndexForVisible;
+//    int max = contentView.getChildCount();
+//    while (min <= max) {
+//      int mid = min + ((max - min) / 2);
+//      View child = contentView.getChildAt(mid);
+//
+//      // If the start of this item is less than the current scroll, it's above of the visible frame
+//      if (child.getY() < currentScrollY) {
+//        min = mid + 1;
+//        continue;
+//      }
+//
+//      // If it's not visible at all, it is below the visible frame
+//      if (!child.isShown()) {
+//        max = mid;
+//        continue;
+//      }
+//
+//      View prevChild = contentView.getChildAt(mid - 1);
+//      if (prevChild != null && prevChild.getGlobalVisibleRect(new Rect())) {
+//        max = mid;
+//        continue;
+//      }
+//
+//      Log.d("RORY_DEBUG", "Found index of first fully visible item: " + mid);
+//
+//      firstVisibleViewForMaintainVisibleContentPosition = new WeakReference<>(child);
+//      Rect frame = new Rect();
+//      child.getHitRect(frame);
+//      prevFirstVisibleFrameForMaintainVisibleContentPosition = frame;
+//    }
+  }
+
+  /**
+   * Called when maintainVisibleContentPosition is used and after a layout change. Detects if the
+   * layout change impacts the scroll position and corrects it if needed.
+   */
+  private void scrollMaintainVisibleContentPosition() {
+    Log.d("RORY_DEBUG", "scrollMaintainVisibleContentPosition");
+
+    ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData =
+      this.mMaintainVisibleContentPositionData;
+    if (maintainVisibleContentPositionData == null) return;
+
+    int currentScrollY = getScrollY();
+
+    View firstVisibleView =
+      firstVisibleViewForMaintainVisibleContentPosition != null
+        ? firstVisibleViewForMaintainVisibleContentPosition.get()
+        : null;
+    if (firstVisibleView == null) {
+      Log.d("RORY_DEBUG", "scrollMaintainVisibleContentPosition found null firstVisibleView");
+      return;
+    }
+    Rect prevFirstVisibleFrame = this.prevFirstVisibleFrameForMaintainVisibleContentPosition;
+    if (prevFirstVisibleFrame == null) {
+      Log.d("RORY_DEBUG", "scrollMaintainVisibleContentPosition found null prevFirstVisibleFrame");
+      return;
+    }
+
+    Rect newFrame = new Rect();
+    firstVisibleView.getHitRect(newFrame);
+    int deltaY = newFrame.top - prevFirstVisibleFrame.top;
+    ReactViewGroup contentView = (ReactViewGroup) mContentView;
+    Log.d("RORY_DEBUG", "scrollMaintainVisibleContentPosition child count: " + contentView.getChildCount());
+    Log.d("RORY_DEBUG", "scrollMaintainVisibleContentPosition found deltaY: " + deltaY);
+
+    if (Math.abs(deltaY) > 1) {
+      int scrollYTo = getScrollY() + deltaY;
+
+      scrollTo(getScrollX(), scrollYTo);
+
+      Integer autoScrollThreshold = maintainVisibleContentPositionData.autoScrollToTopThreshold;
+      if (autoScrollThreshold != null) {
+        // If the offset WAS within the threshold of the start, animate to the start.
+        if (currentScrollY - deltaY <= autoScrollThreshold) {
+          reactSmoothScrollTo(getScrollX(), 0);
+        }
+      }
     }
   }
 

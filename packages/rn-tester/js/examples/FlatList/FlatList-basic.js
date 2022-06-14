@@ -47,7 +47,7 @@ import type {Item} from '../../components/ListExampleShared';
 const PAGE_SIZE = 100;
 const NUM_PAGES = 10;
 const INITIAL_PAGE_OFFSET = Math.floor(NUM_PAGES / 2);
-const LOAD_TIME = 2000;
+const LOAD_TIME = 10;
 
 const VIEWABILITY_CONFIG = {
   minimumViewTime: 3000,
