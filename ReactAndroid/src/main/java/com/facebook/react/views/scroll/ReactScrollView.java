@@ -103,6 +103,7 @@ public class ReactScrollView extends ScrollView
       new ReactScrollViewScrollState(ViewCompat.LAYOUT_DIRECTION_LTR);
   private final ValueAnimator DEFAULT_FLING_ANIMATOR = ObjectAnimator.ofInt(this, "scrollY", 0, 0);
   private PointerEvents mPointerEvents = PointerEvents.AUTO;
+  private @Nullable ReactScrollViewMaintainVisibleContentPositionData mMaintainVisibleContentPositionData;
 
   public ReactScrollView(Context context) {
     this(context, null);
@@ -226,6 +227,10 @@ public class ReactScrollView extends ScrollView
   public void setOverflow(String overflow) {
     mOverflow = overflow;
     invalidate();
+  }
+
+  public void setMaintainVisibleContentPosition(ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData) {
+    mMaintainVisibleContentPositionData = maintainVisibleContentPositionData;
   }
 
   @Override

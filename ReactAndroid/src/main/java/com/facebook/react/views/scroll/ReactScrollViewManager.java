@@ -328,6 +328,23 @@ public class ReactScrollViewManager extends ViewGroupManager<ReactScrollView>
     }
   }
 
+  @ReactProp(name = "maintainVisibleContentPosition")
+  public void setMaintainVisibleContentPosition(ReactHorizontalScrollView view, ReadableMap value) {
+    if (value != null) {
+      int minIndexForVisible = value.getInt("minIndexForVisible");
+      Integer autoScrollToTopThreshold =
+        value.hasKey("autoscrollToTopThreshold")
+          ? value.getInt("autoscrollToTopThreshold")
+          : null;
+      ReactScrollViewMaintainVisibleContentPositionData maintainVisibleContentPositionData =
+        new ReactScrollViewMaintainVisibleContentPositionData(
+          minIndexForVisible, autoScrollToTopThreshold);
+      view.setMaintainVisibleContentPosition(maintainVisibleContentPositionData);
+    } else {
+      view.setMaintainVisibleContentPosition(null);
+    }
+  }
+
   @Override
   public Object updateState(
       ReactScrollView view, ReactStylesDiffMap props, @Nullable StateWrapper stateWrapper) {
