@@ -329,7 +329,7 @@ public class ReactScrollViewManager extends ViewGroupManager<ReactScrollView>
   }
 
   @ReactProp(name = "maintainVisibleContentPosition")
-  public void setMaintainVisibleContentPosition(ReactHorizontalScrollView view, ReadableMap value) {
+  public void setMaintainVisibleContentPosition(ReactScrollView view, ReadableMap value) {
     if (value != null) {
       int minIndexForVisible = value.getInt("minIndexForVisible");
       Integer autoScrollToTopThreshold =
