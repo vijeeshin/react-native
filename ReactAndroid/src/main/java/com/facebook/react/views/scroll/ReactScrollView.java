@@ -20,6 +20,7 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -32,19 +33,30 @@ import androidx.core.view.ViewCompat;
 import com.facebook.common.logging.FLog;
 import com.facebook.infer.annotation.Assertions;
 import com.facebook.react.R;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.UIManager;
+import com.facebook.react.bridge.UIManagerListener;
 import com.facebook.react.common.ReactConstants;
 import com.facebook.react.uimanager.FabricViewStateManager;
 import com.facebook.react.uimanager.MeasureSpecAssertions;
+import com.facebook.react.uimanager.NativeViewHierarchyManager;
 import com.facebook.react.uimanager.PointerEvents;
 import com.facebook.react.uimanager.ReactClippingViewGroup;
 import com.facebook.react.uimanager.ReactClippingViewGroupHelper;
 import com.facebook.react.uimanager.ReactOverflowViewWithInset;
+import com.facebook.react.uimanager.UIBlock;
+import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.ViewProps;
+import com.facebook.react.uimanager.common.UIManagerType;
 import com.facebook.react.uimanager.events.NativeGestureUtil;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasFlingAnimator;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasScrollState;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.ReactScrollViewScrollState;
 import com.facebook.react.views.view.ReactViewBackgroundManager;
+import com.facebook.react.views.view.ReactViewGroup;
+
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -104,6 +116,8 @@ public class ReactScrollView extends ScrollView
   private final ValueAnimator DEFAULT_FLING_ANIMATOR = ObjectAnimator.ofInt(this, "scrollY", 0, 0);
   private PointerEvents mPointerEvents = PointerEvents.AUTO;
   private @Nullable ReactScrollViewMaintainVisibleContentPositionData mMaintainVisibleContentPositionData;
+  private @Nullable WeakReference<View> mFirstVisibleViewForMaintainVisibleContentPosition = null;
+  private @Nullable Rect mPrevFirstVisibleFrameForMaintainVisibleContentPosition = null;
 
   public ReactScrollView(Context context) {
     this(context, null);
@@ -117,6 +131,29 @@ public class ReactScrollView extends ScrollView
     mScroller = getOverScrollerFromParent();
     setOnHierarchyChangeListener(this);
     setScrollBarStyle(SCROLLBARS_OUTSIDE_OVERLAY);
+
+    ReactContext reactContext = UIManagerHelper.getReactContext(this);
+    UIManagerModule uiManagerModule = Assertions.assertNotNull(reactContext.getNativeModule(UIManagerModule.class));
+    uiManagerModule.addUIManagerEventListener(new UIManagerListener() {
+      @Override
+      public void willDispatchViewUpdates(final UIManager uiManager) {
+        uiManagerModule.prependUIBlock(nativeViewHierarchyManager ->
+          computeTargetViewForMaintainVisibleContentPosition());
+
+        uiManagerModule.addUIBlock(nativeViewHierarchyManager ->
+          updateScrollPositionForMaintainVisibleContentPosition());
+      }
+
+      @Override
+      public void didDispatchMountItems(UIManager uiManager) {
+        // no-op
+      }
+
+      @Override
+      public void didScheduleMountItems(UIManager uiManager) {
+        // no-op
+      }
+    });
   }
 
   @Override
@@ -994,6 +1031,69 @@ public class ReactScrollView extends ScrollView
       pendingContentOffsetX = x;
       pendingContentOffsetY = y;
     }
+  }
+
+  private void computeTargetViewForMaintainVisibleContentPosition() {
+    Log.d("RORY_DEBUG", "executing computeTargetView");
+    if (mMaintainVisibleContentPositionData == null) {
+      return;
+    }
+
+    ReactViewGroup contentView = (ReactViewGroup) mContentView;
+    if (contentView == null) {
+      return;
+    }
+
+    int currentScrollY = getScrollY();
+    int min = mMaintainVisibleContentPositionData.minIndexForVisible;
+    int max = contentView.getChildCount();
+    while (min <= max) {
+      int mid = min + ((max - min) / 2);
+      View child = contentView.getChildAt(mid);
+
+      // If the start of this item is less than the current scroll, it's above of the visible frame
+      if (child.getY() < currentScrollY) {
+        min = mid + 1;
+        continue;
+      }
+
+      // If it's not visible at all, it is below the visible frame
+      if (!child.isShown()) {
+        max = mid;
+        continue;
+      }
+
+      View prevChild = contentView.getChildAt(mid - 1);
+      if (prevChild != null && prevChild.getGlobalVisibleRect(new Rect())) {
+        max = mid;
+        continue;
+      }
+
+      mFirstVisibleViewForMaintainVisibleContentPosition = new WeakReference<>(child);
+      Rect frame = new Rect();
+      child.getHitRect(frame);
+      mPrevFirstVisibleFrameForMaintainVisibleContentPosition = frame;
+    }
+  }
+
+  private void updateScrollPositionForMaintainVisibleContentPosition() {
+    Log.d("RORY_DEBUG", "Executing updateScrollPosition");
+    if (mMaintainVisibleContentPositionData == null
+      || mFirstVisibleViewForMaintainVisibleContentPosition == null
+      || mPrevFirstVisibleFrameForMaintainVisibleContentPosition == null) {
+      return;
+    }
+
+    final int currentScrollY = getScrollY();
+    View firstVisibleView = mFirstVisibleViewForMaintainVisibleContentPosition.get();
+    Rect newFrame = new Rect();
+    firstVisibleView.getHitRect(newFrame);
+
+    int deltaY = newFrame.top - mPrevFirstVisibleFrameForMaintainVisibleContentPosition.top;
+    Log.d("RORY_DEBUG", "deltaY: " + deltaY);
+    scrollTo(getScrollX(), getScrollY() + deltaY);
+
+    // TODO: autoScrollToTopThreshold
   }
 
   /**
