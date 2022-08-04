@@ -72,7 +72,7 @@ React Native is developed and supported by many companies and individual core co
 
 ## Contents
 
-- [Expensify Release](#expensify-release)
+  - [Expensify Release](#expensify-release)
   - [Contents](#contents)
   - [📋 Requirements](#-requirements)
   - [🎉 Building your first React Native app](#-building-your-first-react-native-app)
