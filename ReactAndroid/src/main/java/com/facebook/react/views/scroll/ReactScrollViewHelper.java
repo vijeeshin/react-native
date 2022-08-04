@@ -613,4 +613,8 @@ public class ReactScrollViewHelper {
     /** Get the scroll view dispatch time for throttling */
     long getLastScrollDispatchTime();
   }
+
+  public interface HasSmoothScroll {
+    void reactSmoothScrollTo(int x, int y);
+  }
 }
