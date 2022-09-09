@@ -37,6 +37,7 @@ class EnableDisableList extends React.Component<{}, {scrollEnabled: boolean}> {
       <View>
         <ScrollView
           automaticallyAdjustContentInsets={false}
+          nestedScrollEnabled
           style={styles.scrollView}
           scrollEnabled={this.state.scrollEnabled}>
           {ITEMS.map(createItemRow)}
@@ -80,6 +81,7 @@ class AppendingList extends React.Component<
             minIndexForVisible: 1,
             autoscrollToTopThreshold: 10,
           }}
+          nestedScrollEnabled
           style={styles.scrollView}>
           {this.state.items.map(item =>
             React.cloneElement(item, {key: item.props.msg}),
@@ -171,7 +173,10 @@ class AppendingList extends React.Component<
 
 function CenterContentList(): React.Node {
   return (
-    <ScrollView style={styles.scrollView} centerContent={true}>
+    <ScrollView
+      nestedScrollEnabled
+      style={styles.scrollView}
+      centerContent={true}>
       <Text>This should be in center.</Text>
     </ScrollView>
   );
@@ -210,6 +215,7 @@ const examples = ([
               _scrollView = scrollView;
             }}
             automaticallyAdjustContentInsets={false}
+            nestedScrollEnabled
             onScroll={() => {
               console.log('onScroll!');
             }}
@@ -399,10 +405,7 @@ const examples = ([
       return <ContentOffsetList />;
     },
   },
-]: Array<RNTesterModuleExample>);
-
-if (Platform.OS === 'ios') {
-  examples.push({
+  {
     title: '<ScrollView> smooth bi-directional content loading\n',
     description:
       'The `maintainVisibleContentPosition` prop allows insertions to either end of the content ' +
@@ -410,7 +413,10 @@ if (Platform.OS === 'ios') {
     render: function () {
       return <AppendingList />;
     },
-  });
+  },
+]: Array<RNTesterModuleExample>);
+
+if (Platform.OS === 'ios') {
   examples.push({
     title: '<ScrollView> (centerContent = true)\n',
     description:
@@ -493,6 +499,7 @@ const AndroidScrollBarOptions = () => {
     <View>
       <ScrollView
         style={[styles.scrollView, {height: 200}]}
+        nestedScrollEnabled
         persistentScrollbar={persistentScrollBar}>
         {ITEMS.map(createItemRow)}
       </ScrollView>
@@ -1204,8 +1211,7 @@ const BouncesExampleHorizontal = () => {
         style={[styles.scrollView, {height: 200}]}
         horizontal={true}
         alwaysBounceHorizontal={bounce}
-        contentOffset={{x: 100, y: 0}}
-        nestedScrollEnabled>
+        contentOffset={{x: 100, y: 0}}>
         {ITEMS.map(createItemRow)}
       </ScrollView>
       <View>
