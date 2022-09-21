@@ -44,8 +44,10 @@ import com.facebook.react.uimanager.events.NativeGestureUtil;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasFlingAnimator;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasScrollEventThrottle;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasScrollState;
+import com.facebook.react.views.scroll.ReactScrollViewHelper.HasSmoothScroll;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.ReactScrollViewScrollState;
 import com.facebook.react.views.view.ReactViewBackgroundManager;
+
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -64,7 +66,8 @@ public class ReactScrollView extends ScrollView
         ReactOverflowViewWithInset,
         HasScrollState,
         HasFlingAnimator,
-        HasScrollEventThrottle {
+        HasScrollEventThrottle,
+        HasSmoothScroll {
 
   private static @Nullable Field sScrollerField;
   private static boolean sTriedToGetScrollerField = false;
@@ -108,6 +111,7 @@ public class ReactScrollView extends ScrollView
   private PointerEvents mPointerEvents = PointerEvents.AUTO;
   private long mLastScrollDispatchTime = 0;
   private int mScrollEventThrottle = 0;
+  private @Nullable MaintainVisibleContentPositionHelper mMaintainVisibleContentPositionHelper = null;
 
   public ReactScrollView(Context context) {
     this(context, null);
@@ -239,6 +243,19 @@ public class ReactScrollView extends ScrollView
     invalidate();
   }
 
+  public void setMaintainVisibleContentPosition(@Nullable MaintainVisibleContentPositionHelper.Config config) {
+    if (config != null && mMaintainVisibleContentPositionHelper == null) {
+      mMaintainVisibleContentPositionHelper = new MaintainVisibleContentPositionHelper(this, false);
+      mMaintainVisibleContentPositionHelper.start();
+    } else if (config == null && mMaintainVisibleContentPositionHelper != null) {
+      mMaintainVisibleContentPositionHelper.stop();
+      mMaintainVisibleContentPositionHelper = null;
+    }
+    if (mMaintainVisibleContentPositionHelper != null) {
+      mMaintainVisibleContentPositionHelper.setConfig(config);
+    }
+  }
+
   @Override
   public @Nullable String getOverflow() {
     return mOverflow;
@@ -288,6 +305,17 @@ public class ReactScrollView extends ScrollView
     super.onAttachedToWindow();
     if (mRemoveClippedSubviews) {
       updateClippingRect();
+    }
+    if (mMaintainVisibleContentPositionHelper != null) {
+      mMaintainVisibleContentPositionHelper.start();
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow() {
+    super.onDetachedFromWindow();
+    if (mMaintainVisibleContentPositionHelper != null) {
+      mMaintainVisibleContentPositionHelper.stop();
     }
   }
 
@@ -1059,6 +1087,10 @@ public class ReactScrollView extends ScrollView
       int oldBottom) {
     if (mContentView == null) {
       return;
+    }
+
+    if (mMaintainVisibleContentPositionHelper != null) {
+      mMaintainVisibleContentPositionHelper.updateScrollPosition();
     }
 
     int currentScrollY = getScrollY();
