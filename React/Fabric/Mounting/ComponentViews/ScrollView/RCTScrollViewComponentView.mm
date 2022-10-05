@@ -23,6 +23,7 @@
 #import "RCTConversions.h"
 #import "RCTEnhancedScrollView.h"
 #import "RCTFabricComponentsPlugins.h"
+#import "RCTPullToRefreshViewComponentView.h"
 
 using namespace facebook::react;
 
@@ -100,6 +101,11 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
   BOOL _shouldUpdateContentInsetAdjustmentBehavior;
 
   CGPoint _contentOffsetWhenClipped;
+
+  __weak UIView *_contentView;
+
+  CGRect _prevFirstVisibleFrame;
+  __weak UIView *_firstVisibleView;
 }
 
 + (RCTScrollViewComponentView *_Nullable)findScrollViewComponentViewForView:(UIView *)view
@@ -149,10 +155,17 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
 
 #pragma mark - RCTMountingTransactionObserving
 
+- (void)mountingTransactionWillMount:(const facebook::react::MountingTransaction &)transaction
+                withSurfaceTelemetry:(const facebook::react::SurfaceTelemetry &)surfaceTelemetry
+{
+  [self _prepareForMaintainVisibleScrollPosition];
+}
+
 - (void)mountingTransactionDidMount:(MountingTransaction const &)transaction
                withSurfaceTelemetry:(facebook::react::SurfaceTelemetry const &)surfaceTelemetry
 {
   [self _remountChildren];
+  [self _adjustForMaintainVisibleContentPosition];
 }
 
 #pragma mark - RCTComponentViewProtocol
@@ -337,11 +350,23 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
 - (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index
 {
   [_containerView insertSubview:childComponentView atIndex:index];
+  if ([childComponentView isKindOfClass:RCTPullToRefreshViewComponentView.class]) {
+    // Ignore the pull to refresh component.
+  } else {
+    RCTAssert(_contentView == nil, @"RCTScrollView may only contain a single subview.");
+    _contentView = childComponentView;
+  }
 }
 
 - (void)unmountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index
 {
   [childComponentView removeFromSuperview];
+  if ([childComponentView isKindOfClass:RCTPullToRefreshViewComponentView.class]) {
+    // Ignore the pull to refresh component.
+  } else {
+    RCTAssert(_contentView == childComponentView, @"Attempted to remove non-existent subview");
+    _contentView = nil;
+  }
 }
 
 /*
@@ -401,6 +426,9 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
   _shouldUpdateContentInsetAdjustmentBehavior = YES;
   _state.reset();
   _isUserTriggeredScrolling = NO;
+  _contentView = nil;
+  _prevFirstVisibleFrame = CGRectZero;
+  _firstVisibleView = nil;
   [super prepareForRecycle];
 }
 
@@ -677,6 +705,81 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
 - (void)removeScrollListener:(NSObject<UIScrollViewDelegate> *)scrollListener
 {
   [self.scrollViewDelegateSplitter removeDelegate:scrollListener];
+}
+
+#pragma mark - Maintain visible content position
+
+- (void)_prepareForMaintainVisibleScrollPosition
+{
+  const auto &props = *std::static_pointer_cast<const ScrollViewProps>(_props);
+  if (!props.maintainVisibleContentPosition) {
+    return;
+  }
+
+  BOOL inverted = false; // TODO: props.inverted
+  BOOL horizontal = _scrollView.contentSize.width > self.frame.size.width;
+  int minIdx = props.maintainVisibleContentPosition.value().minIndexForVisible;
+  for (NSUInteger ii = minIdx; ii < _contentView.subviews.count; ++ii) {
+    // Find the first entirely visible view. This must be done after we update the content offset
+    // or it will tend to grab rows that were made visible by the shift in position
+    UIView *subview = _contentView.subviews[ii];
+    BOOL hasNewView = NO;
+    if (horizontal) {
+      CGFloat leftInset = inverted ? _scrollView.contentInset.right : _scrollView.contentInset.left;
+      CGFloat x = _scrollView.contentOffset.x + leftInset;
+      hasNewView = subview.frame.origin.x > x;
+    } else {
+      CGFloat bottomInset = inverted ? _scrollView.contentInset.top : _scrollView.contentInset.bottom;
+      CGFloat y = self->_scrollView.contentOffset.y + bottomInset;
+      hasNewView = subview.frame.origin.y > y;
+    }
+    if (hasNewView || ii == _contentView.subviews.count - 1) {
+      _prevFirstVisibleFrame = subview.frame;
+      _firstVisibleView = subview;
+      break;
+    }
+  }
+}
+
+- (void)_adjustForMaintainVisibleContentPosition
+{
+  const auto &props = *std::static_pointer_cast<const ScrollViewProps>(_props);
+  if (!props.maintainVisibleContentPosition) {
+    return;
+  }
+
+  std::optional<int> autoscrollThreshold = props.maintainVisibleContentPosition.value().autoscrollToTopThreshold;
+  BOOL inverted = false; // TODO: props.inverted
+  BOOL horizontal = _scrollView.contentSize.width > self.frame.size.width;
+  // TODO: detect and handle/ignore re-ordering
+  if (horizontal) {
+    CGFloat deltaX = _firstVisibleView.frame.origin.x - _prevFirstVisibleFrame.origin.x;
+    if (ABS(deltaX) > 0.1) {
+      CGFloat leftInset = inverted ? self->_scrollView.contentInset.right : _scrollView.contentInset.left;
+      CGFloat x = _scrollView.contentOffset.x + leftInset;
+      _scrollView.contentOffset = CGPointMake(_scrollView.contentOffset.x + deltaX, _scrollView.contentOffset.y);
+      if (autoscrollThreshold) {
+        // If the offset WAS within the threshold of the start, animate to the start.
+        if (x <= autoscrollThreshold.value()) {
+          [self scrollToOffset:CGPointMake(-leftInset, _scrollView.contentOffset.y) animated:YES];
+        }
+      }
+    }
+  } else {
+    CGRect newFrame = _firstVisibleView.frame;
+    CGFloat deltaY = newFrame.origin.y - _prevFirstVisibleFrame.origin.y;
+    if (ABS(deltaY) > 0.1) {
+      CGFloat bottomInset = inverted ? _scrollView.contentInset.top : _scrollView.contentInset.bottom;
+      CGFloat y = _scrollView.contentOffset.y + bottomInset;
+      _scrollView.contentOffset = CGPointMake(_scrollView.contentOffset.x, _scrollView.contentOffset.y + deltaY);
+      if (autoscrollThreshold) {
+        // If the offset WAS within the threshold of the start, animate to the start.
+        if (y <= autoscrollThreshold.value()) {
+          [self scrollToOffset:CGPointMake(_scrollView.contentOffset.x, -bottomInset) animated:YES];
+        }
+      }
+    }
+  }
 }
 
 @end
