@@ -172,7 +172,7 @@ inline std::string toString(
   }
   return "{minIndexForVisible: " + toString(value.value().minIndexForVisible) +
       ", autoscrollToTopThreshold: " +
-      toString(value.value().autoscrollToTopThreshold) + "}";
+      toString(value.value().autoscrollToTopThreshold.value()) + "}";
 }
 
 } // namespace react
