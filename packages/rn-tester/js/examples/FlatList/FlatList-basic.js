@@ -285,7 +285,7 @@ class FlatListExample extends React.PureComponent<Props, State> {
             viewabilityConfig={VIEWABILITY_CONFIG}
             maintainVisibleContentPosition={
               this.state.maintainVisibleContentPosition
-                ? {minIndexForVisible: 1}
+                ? {minIndexForVisible: 2}
                 : undefined
             }
             {...flatListItemRendererProps}

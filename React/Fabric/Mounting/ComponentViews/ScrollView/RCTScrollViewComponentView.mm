@@ -716,7 +716,6 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
     return;
   }
 
-  BOOL inverted = false; // TODO: props.inverted
   BOOL horizontal = _scrollView.contentSize.width > self.frame.size.width;
   int minIdx = props.maintainVisibleContentPosition.value().minIndexForVisible;
   for (NSUInteger ii = minIdx; ii < _contentView.subviews.count; ++ii) {
@@ -725,13 +724,9 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
     UIView *subview = _contentView.subviews[ii];
     BOOL hasNewView = NO;
     if (horizontal) {
-      CGFloat leftInset = inverted ? _scrollView.contentInset.right : _scrollView.contentInset.left;
-      CGFloat x = _scrollView.contentOffset.x + leftInset;
-      hasNewView = subview.frame.origin.x > x;
+      hasNewView = subview.frame.origin.x > _scrollView.contentOffset.x;
     } else {
-      CGFloat bottomInset = inverted ? _scrollView.contentInset.top : _scrollView.contentInset.bottom;
-      CGFloat y = self->_scrollView.contentOffset.y + bottomInset;
-      hasNewView = subview.frame.origin.y > y;
+      hasNewView = subview.frame.origin.y > _scrollView.contentOffset.y;
     }
     if (hasNewView || ii == _contentView.subviews.count - 1) {
       _prevFirstVisibleFrame = subview.frame;
@@ -749,33 +744,32 @@ static void RCTSendScrollEventForNativeAnimations_DEPRECATED(UIScrollView *scrol
   }
 
   std::optional<int> autoscrollThreshold = props.maintainVisibleContentPosition.value().autoscrollToTopThreshold;
-  BOOL inverted = false; // TODO: props.inverted
   BOOL horizontal = _scrollView.contentSize.width > self.frame.size.width;
   // TODO: detect and handle/ignore re-ordering
   if (horizontal) {
     CGFloat deltaX = _firstVisibleView.frame.origin.x - _prevFirstVisibleFrame.origin.x;
-    if (ABS(deltaX) > 0.1) {
-      CGFloat leftInset = inverted ? self->_scrollView.contentInset.right : _scrollView.contentInset.left;
-      CGFloat x = _scrollView.contentOffset.x + leftInset;
+    if (ABS(deltaX) > 0.5) {
+      CGFloat x = _scrollView.contentOffset.x;
+      [self _forceDispatchNextScrollEvent];
       _scrollView.contentOffset = CGPointMake(_scrollView.contentOffset.x + deltaX, _scrollView.contentOffset.y);
       if (autoscrollThreshold) {
         // If the offset WAS within the threshold of the start, animate to the start.
         if (x <= autoscrollThreshold.value()) {
-          [self scrollToOffset:CGPointMake(-leftInset, _scrollView.contentOffset.y) animated:YES];
+          [self scrollToOffset:CGPointMake(0, _scrollView.contentOffset.y) animated:YES];
         }
       }
     }
   } else {
     CGRect newFrame = _firstVisibleView.frame;
     CGFloat deltaY = newFrame.origin.y - _prevFirstVisibleFrame.origin.y;
-    if (ABS(deltaY) > 0.1) {
-      CGFloat bottomInset = inverted ? _scrollView.contentInset.top : _scrollView.contentInset.bottom;
-      CGFloat y = _scrollView.contentOffset.y + bottomInset;
+    if (ABS(deltaY) > 0.5) {
+      CGFloat y = _scrollView.contentOffset.y;
+      [self _forceDispatchNextScrollEvent];
       _scrollView.contentOffset = CGPointMake(_scrollView.contentOffset.x, _scrollView.contentOffset.y + deltaY);
       if (autoscrollThreshold) {
         // If the offset WAS within the threshold of the start, animate to the start.
         if (y <= autoscrollThreshold.value()) {
-          [self scrollToOffset:CGPointMake(_scrollView.contentOffset.x, -bottomInset) animated:YES];
+          [self scrollToOffset:CGPointMake(_scrollView.contentOffset.x, 0) animated:YES];
         }
       }
     }
