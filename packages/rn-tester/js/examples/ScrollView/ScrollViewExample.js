@@ -78,7 +78,7 @@ class AppendingList extends React.Component<
         <ScrollView
           automaticallyAdjustContentInsets={false}
           maintainVisibleContentPosition={{
-            minIndexForVisible: 1,
+            minIndexForVisible: 0,
             autoscrollToTopThreshold: 10,
           }}
           nestedScrollEnabled

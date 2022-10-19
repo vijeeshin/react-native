@@ -1618,10 +1618,11 @@ class VirtualizedList extends React.PureComponent<Props, State> {
       distanceFromStart = 0;
     }
 
-
     // TODO: T121172172 Look into why we're "defaulting" to a threshold of 2 when oERT is not present
     const startThreshold =
-      onStartReachedThreshold != null ? onStartReachedThreshold * visibleLength : 2;
+      onStartReachedThreshold != null
+        ? onStartReachedThreshold * visibleLength
+        : 2;
     const endThreshold =
       onEndReachedThreshold != null ? onEndReachedThreshold * visibleLength : 2;
     const isWithinStartThreshold = distanceFromStart <= startThreshold;
