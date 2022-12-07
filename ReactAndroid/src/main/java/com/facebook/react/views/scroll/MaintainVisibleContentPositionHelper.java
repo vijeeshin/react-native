@@ -24,6 +24,7 @@ import com.facebook.react.uimanager.common.UIManagerType;
 import com.facebook.react.uimanager.common.ViewUtil;
 import com.facebook.react.views.view.ReactViewGroup;
 import com.facebook.react.views.scroll.ReactScrollViewHelper.HasSmoothScroll;
+import android.util.Log;
 
 import java.lang.ref.WeakReference;
 
@@ -51,6 +52,7 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
 
     static Config fromReadableMap(ReadableMap value) {
       int minIndexForVisible = value.getInt("minIndexForVisible");
+       Log.d("FOO",minIndexForVisible.toString());
       Integer autoScrollToTopThreshold =
         value.hasKey("autoscrollToTopThreshold")
           ? value.getInt("autoscrollToTopThreshold")
@@ -62,6 +64,7 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
   public MaintainVisibleContentPositionHelper(ScrollViewT scrollView, boolean horizontal) {
     mScrollView = scrollView;
     mHorizontal = horizontal;
+     Log.d("FOO","MaintainVisibleContentPositionHelper");
   }
 
   public void setConfig(@Nullable Config config) {
@@ -115,6 +118,7 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
 
     if (mHorizontal) {
       int deltaX = newFrame.left - mPrevFirstVisibleFrame.left;
+
       if (deltaX != 0) {
         int scrollX = mScrollView.getScrollX();
         mScrollView.scrollTo(scrollX + deltaX, mScrollView.getScrollY());
@@ -125,6 +129,7 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
       }
     } else {
       int deltaY = newFrame.top - mPrevFirstVisibleFrame.top;
+      Log.d("ExpFOO",String.ValueOf(deltaY));
       if (deltaY != 0) {
         int scrollY = mScrollView.getScrollY();
         mScrollView.scrollTo(mScrollView.getScrollX(), scrollY + deltaY);
@@ -148,6 +153,7 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
   }
 
   private void computeTargetView() {
+
     if (mConfig == null) {
       return;
     }
@@ -157,9 +163,12 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
     }
 
     int currentScroll = mHorizontal ? mScrollView.getScrollX() : mScrollView.getScrollY();
-    for (int i = mConfig.minIndexForVisible; i < contentView.getChildCount(); i++) {
+    Log.d("ExpFOO",String.ValueOf(currentScroll));
+    for (int i = contentView.getChildCount() ; i > mConfig.minIndexForVisible; i--) {
       View child = contentView.getChildAt(i);
       float position = mHorizontal ? child.getX() : child.getY();
+    Log.d("ExpFOO",String.ValueOf(position));
+ Log.d("ExpFOO",String.ValueOf(contentView.getChildCount()));
       if (position > currentScroll || i == contentView.getChildCount() - 1) {
         mFirstVisibleView = new WeakReference<>(child);
         Rect frame = new Rect();
@@ -174,16 +183,19 @@ public class MaintainVisibleContentPositionHelper<ScrollViewT extends ViewGroup 
 
   @Override
   public void willDispatchViewUpdates(final UIManager uiManager) {
+    Log.d("FOO","willDispatchViewUpdates");
     UiThreadUtil.runOnUiThread(() -> computeTargetView());
   }
 
   @Override
   public void willMountItems(UIManager uiManager) {
+    Log.d("FOO","willMountItems");
     computeTargetView();
   }
 
   @Override
   public void didMountItems(UIManager uiManager) {
+    Log.d("FOO","didMountItems");
     updateScrollPositionInternal();
   }
 
